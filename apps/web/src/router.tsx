@@ -108,7 +108,22 @@ function SetupPage() {
     setBusy(true);
     setError('');
     try {
-      await setupIdentity({ serverUrl, deviceName, invite: invite || undefined });
+      // Probe the server before generating keys / hitting the registration
+      // endpoint — gives a clear error if the URL is wrong.
+      const url = serverUrl.replace(/\/$/, '');
+      try {
+        const probe = await fetch(`${url}/api/v1/health`);
+        if (!probe.ok) throw new Error(`server returned ${probe.status}`);
+        const body = (await probe.json()) as { service?: string };
+        if (body.service !== 'routr') {
+          throw new Error('not a Beam server at that URL');
+        }
+      } catch (probeErr) {
+        throw new Error(
+          `Can't reach server: ${probeErr instanceof Error ? probeErr.message : probeErr}`,
+        );
+      }
+      await setupIdentity({ serverUrl: url, deviceName, invite: invite || undefined });
       window.location.href = '/inbox';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed');
