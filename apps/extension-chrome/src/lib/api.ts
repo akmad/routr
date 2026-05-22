@@ -1,5 +1,15 @@
 import { bytesToB64u, sign } from '@routr/crypto';
-import type { StoredIdentity } from './keystore.js';
+import { type StoredIdentity, clearIdentity } from './keystore.js';
+
+/**
+ * Wipes the local identity when the server says we're an unknown device
+ * (we were revoked elsewhere). Background scripts have no UI to navigate
+ * to /setup; clearing keys is enough — the next popup open shows the
+ * setup screen and the WS reconnect loop will exit on the next attempt.
+ */
+async function handleRevoked(): Promise<void> {
+  await clearIdentity();
+}
 
 export async function signedFetch(
   identity: StoredIdentity,
@@ -17,7 +27,7 @@ export async function signedFetch(
   const sigInput = `${method}\n${path}\n${timestamp}\n${hashHex}\n`;
   const sigBytes = sign(identity.signSecretKey, new TextEncoder().encode(sigInput));
   const authHeader = `Beam-Sig deviceId="${identity.deviceId}", timestamp="${timestamp}", signature="${bytesToB64u(sigBytes)}"`;
-  return fetch(`${identity.serverUrl}${path}`, {
+  const res = await fetch(`${identity.serverUrl}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
@@ -25,6 +35,15 @@ export async function signedFetch(
       ...(init.headers as Record<string, string> | undefined),
     },
   });
+  if (res.status === 401) {
+    try {
+      const body = (await res.clone().json()) as { error?: string };
+      if (body.error === 'unknown_device') void handleRevoked();
+    } catch {
+      // not JSON — ignore
+    }
+  }
+  return res;
 }
 
 export async function registerDevice(

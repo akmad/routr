@@ -1,6 +1,6 @@
 import { b64uToBytes, bytesToB64u, decryptPayload, sign, unwrapKey } from '@routr/crypto';
 import { signedFetch } from '../lib/api.js';
-import { loadIdentity } from '../lib/keystore.js';
+import { clearIdentity, loadIdentity } from '../lib/keystore.js';
 import { listRules, suggestDevice } from '../lib/rules.js';
 import { sendFile as senderSendFile, sendUrl as senderSendUrl } from '../lib/sender.js';
 import type { InboxMessage } from '../lib/ws.js';
@@ -95,7 +95,15 @@ export default defineBackground(() => {
         void handleEnvelope(msg.envelope, identity);
       }
     };
-    ws.onclose = () => scheduleReconnect();
+    ws.onclose = (ev) => {
+      if (ev.code === 4002) {
+        // Server says we're an unknown device — we were revoked elsewhere.
+        // Clear local identity and stop the reconnect loop.
+        void clearIdentity();
+        return;
+      }
+      scheduleReconnect();
+    };
   }
 
   async function handleEnvelope(
