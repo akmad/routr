@@ -152,6 +152,11 @@ export default defineBackground(() => {
     identity: Awaited<ReturnType<typeof loadIdentity>>,
   ) {
     if (!identity) return;
+
+    // Step 1: decrypt. If this throws we DON'T ack — the envelope stays in
+    // the inbox so a future reload (with a hopefully-repaired keystore) can
+    // try again. It'll fall off on expiresAt regardless.
+    let payload: { kind: string; url?: string; filename?: string; text?: string };
     try {
       const payloadKey = unwrapKey(
         b64uToBytes(env.wrappedKey),
@@ -160,12 +165,13 @@ export default defineBackground(() => {
         identity.deviceId,
       );
       const plaintext = decryptPayload(payloadKey, b64uToBytes(env.ciphertext));
-      const payload = JSON.parse(new TextDecoder().decode(plaintext)) as {
-        kind: string;
-        url?: string;
-        filename?: string;
-      };
+      payload = JSON.parse(new TextDecoder().decode(plaintext));
+    } catch {
+      return;
+    }
 
+    // Step 2: surface a notification. Failing here shouldn't block the ack.
+    try {
       if (payload.kind === 'url' && payload.url) {
         await browser.notifications.create({
           type: 'basic',
@@ -180,14 +186,26 @@ export default defineBackground(() => {
           title: 'Beam — file received',
           message: `${payload.filename} — open the Beam web app to download`,
         });
+      } else if (payload.kind === 'note' && payload.text) {
+        await browser.notifications.create({
+          type: 'basic',
+          iconUrl: '/icon/128.png',
+          title: 'Beam — note',
+          message: payload.text.slice(0, 200),
+        });
       }
+    } catch {
+      // notification API may be missing in some contexts; ignore.
+    }
 
+    // Step 3: ack.
+    try {
       await signedFetch(identity, `/api/v1/envelopes/${env.id}/ack`, {
         method: 'POST',
         body: '{}',
       });
     } catch {
-      // Silently ignore decryption failures for malformed envelopes.
+      // ack will be retried on the next connect's drain.
     }
   }
 

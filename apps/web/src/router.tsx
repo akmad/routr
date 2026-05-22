@@ -299,8 +299,18 @@ function InboxPage() {
     sock.onDisconnected = () => setConnected(false);
     sock.onRevoked = () => void handleRevoked();
     sock.onEnvelope = (env) => {
-      setItems((prev) => [decryptEnvelope(env, identity.kexSecretKey, identity.deviceId), ...prev]);
-      void signedFetch(identity, `/api/v1/envelopes/${env.id}/ack`, { method: 'POST', body: '{}' });
+      const item = decryptEnvelope(env, identity.kexSecretKey, identity.deviceId);
+      setItems((prev) => [item, ...prev]);
+      // Only ack on successful decryption — if the local keystore is somehow
+      // out of sync, we don't want to ack-and-lose. Failed envelopes stay
+      // in the inbox until expiresAt, giving us another chance after a
+      // reload/repair.
+      if (!item.error) {
+        void signedFetch(identity, `/api/v1/envelopes/${env.id}/ack`, {
+          method: 'POST',
+          body: '{}',
+        });
+      }
     };
     sock.connect();
     return () => sock.disconnect();
