@@ -18,36 +18,26 @@ Bigger features are broken into items here before being started.
 
 ## Now
 
-_All MVP milestones (M0–M4) complete. Working through follow-ups
-from the M4.3 security review and the parking lot below._
+_All MVP milestones (M0–M4) complete plus a substantial post-MVP polish
+pass (notes, multi-recipient, sent log, fingerprints, rate limiting,
+nonce store, signature uniqueness, revocation, last-seen, admin stats,
+extension parity for rules + file send + image context menu, etc).
+See CHANGELOG.md for the full list._
+
+_Currently no committed work. Pick something from the parking lot to
+queue up next, or fix whatever surfaces in real-use bug reports._
 
 ## Next
 
-- [ ] Bring the Chrome extension to feature parity with web (rules,
-  fingerprint display, file send).
-- [ ] Server-side envelope signature uniqueness index (L3 from
-  security review).
-- [ ] Server-side nonce store for signed-request replay defense (L2).
+- [ ] App icons (PNG bundle for extension; SVG already in web).
+- [ ] Web component tests (React Testing Library) for the pages.
+- [ ] CLI for server admin operations beyond the stats endpoint.
 
 ## Backlog (scoped, not started)
 
-_(empty — see Parking lot for next priorities)_
+_(empty — see Parking lot)_
 
-### Milestone 3 — Chrome extension
-
-- [ ] **M3.1** `apps/extension-chrome` bootstrap: WXT + React, MV3.
-- [ ] **M3.2** First-run pairing flow: show QR scanner / paste pairing
-  code; receive keys from existing device.
-- [ ] **M3.3** Toolbar action: "Send this tab" → encrypt URL → POST to
-  server.
-- [ ] **M3.4** Context menu: "Send link to Beam" on right-click of a
-  link.
-- [ ] **M3.5** Background service worker: WS connection to server,
-  notification on incoming message.
-- [ ] **M3.6** Web Store packaging metadata (icons, screenshots,
-  manifest description). Not actually publishing in MVP.
-
-### Milestone 4 — Polish for v1.0 release
+### Milestone 4 — Polish for v1.0 release (done in MVP push)
 
 - [ ] **M4.1** End-to-end Playwright test: web sends URL → extension
   receives → reverse direction.
