@@ -19,13 +19,50 @@ export default defineBackground(() => {
       title: 'Send this tab with Beam',
       contexts: ['page', 'action'],
     });
+    browser.contextMenus.create({
+      id: 'beam-send-image',
+      title: 'Send image with Beam',
+      contexts: ['image'],
+    });
   });
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === 'beam-send-image' && info.srcUrl) {
+      void sendImageFromUrl(info.srcUrl);
+      return;
+    }
     const url =
       info.menuItemId === 'beam-send-link' ? String(info.linkUrl ?? '') : String(tab?.url ?? '');
     if (url) void sendUrl(url);
   });
+
+  async function sendImageFromUrl(srcUrl: string) {
+    // Fetch the image bytes in the background context (avoids CORS in the
+    // content page) and ship them as a file envelope.
+    try {
+      const res = await fetch(srcUrl);
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const blob = await res.blob();
+      const buf = await blob.arrayBuffer();
+      // Pick a filename from the URL path tail, or fall back.
+      const tail = new URL(srcUrl).pathname.split('/').pop() ?? 'image';
+      const filename = tail.includes('.') ? tail : `${tail}.bin`;
+      await sendFile(new Uint8Array(buf), filename, blob.type || 'application/octet-stream');
+      await browser.notifications.create({
+        type: 'basic',
+        iconUrl: '/icon/128.png',
+        title: 'Beam',
+        message: `Sent ${filename}`,
+      });
+    } catch (e) {
+      await browser.notifications.create({
+        type: 'basic',
+        iconUrl: '/icon/128.png',
+        title: 'Beam — send failed',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
 
   browser.action.onClicked.addListener(() => {
     void browser.action.openPopup();
