@@ -8,6 +8,11 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Drag-and-drop + paste in the extension popup**: dropping a file
+  anywhere in the open popup, or pasting one from the clipboard,
+  sends it to the currently-selected recipient — same UX as the web
+  Send page. Visual drop zone (dashed indigo border + "Drop to send")
+  appears while a file is being dragged over.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

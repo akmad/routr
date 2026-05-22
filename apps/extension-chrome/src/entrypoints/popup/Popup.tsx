@@ -161,6 +161,7 @@ function ReadyPanel({
   const [errMsg, setErrMsg] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [recipientId, setRecipientId] = useState('');
+  const [dragOver, setDragOver] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: currentTabUrl drives rule pre-selection
   useEffect(() => {
@@ -231,6 +232,54 @@ function ReadyPanel({
     }
   }
 
+  // Drag-and-drop + paste: dropping a file anywhere in the popup window or
+  // pasting one from the clipboard sends it to the current recipient.
+  // `sendFile` is included in the dep list so the handlers see the current
+  // recipient/sending state via that closure.
+  useEffect(() => {
+    const ready = devices.length > 0 && !sending;
+
+    function onDragOver(e: DragEvent) {
+      if (!ready) return;
+      // Only react when files are actually being dragged.
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      setDragOver(true);
+    }
+    function onDragLeave(e: DragEvent) {
+      // Leaving the window itself: relatedTarget is null when the cursor exits
+      // the popup entirely (vs. crossing internal element boundaries).
+      if (e.relatedTarget === null) setDragOver(false);
+    }
+    function onDrop(e: DragEvent) {
+      if (!ready) return;
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (file) void sendFile(file);
+    }
+    function onPaste(e: ClipboardEvent) {
+      if (!ready) return;
+      const file = e.clipboardData?.files?.[0];
+      if (file) {
+        e.preventDefault();
+        void sendFile(file);
+      }
+    }
+
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+      window.removeEventListener('paste', onPaste);
+    };
+    // biome-ignore lint/correctness/useExhaustiveDependencies: sendFile is recreated each render; we rebind whenever it changes via the values it captures
+  }, [devices.length, sending, sendFile]);
+
   const [showFingerprints, setShowFingerprints] = useState(false);
   let ownFp = '—';
   try {
@@ -240,7 +289,14 @@ function ReadyPanel({
   }
 
   return (
-    <div className="w-72 p-4">
+    <div
+      className={`w-72 p-4 relative ${dragOver ? 'ring-2 ring-indigo-400 ring-inset bg-indigo-50/40' : ''}`}
+    >
+      {dragOver && (
+        <div className="absolute inset-2 border-2 border-dashed border-indigo-400 rounded pointer-events-none flex items-center justify-center bg-white/80">
+          <span className="text-xs text-indigo-600 font-medium">Drop to send</span>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-3">
         <span className="font-bold text-indigo-600 text-sm">Beam</span>
         <span className="text-xs text-gray-400">{identity.deviceId.slice(0, 8)}…</span>
