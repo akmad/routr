@@ -1,12 +1,14 @@
 import { bytesToB64u, generateIdentity } from '@routr/crypto';
 import { type FormEvent, useEffect, useState } from 'react';
-import { registerDevice } from '../../lib/api.js';
+import { registerDevice, signedFetch } from '../../lib/api.js';
 import {
   type StoredIdentity,
   clearIdentity,
   loadIdentity,
   saveIdentity,
 } from '../../lib/keystore.js';
+
+type Device = { id: string; name: string; kexPub: string };
 
 type Status = 'loading' | 'setup' | 'ready';
 
@@ -164,15 +166,29 @@ function ReadyPanel({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<'sent' | 'error' | null>(null);
   const [errMsg, setErrMsg] = useState('');
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [recipientId, setRecipientId] = useState('');
+
+  useEffect(() => {
+    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
+      .then((r) => r.json())
+      .then((data) => {
+        const others = (data as Device[]).filter((d) => d.id !== identity.deviceId);
+        setDevices(others);
+        if (others.length > 0 && !recipientId) setRecipientId(others[0]?.id ?? '');
+      })
+      .catch(() => {});
+  }, [identity, recipientId]);
 
   async function sendCurrentTab() {
     setSending(true);
     setResult(null);
     try {
-      const res = (await browser.runtime.sendMessage({ type: 'send_url', url: currentTabUrl })) as {
-        ok: boolean;
-        error?: string;
-      };
+      const res = (await browser.runtime.sendMessage({
+        type: 'send_url',
+        url: currentTabUrl,
+        recipientId,
+      })) as { ok: boolean; error?: string };
       if (res.ok) {
         setResult('sent');
       } else {
@@ -194,10 +210,25 @@ function ReadyPanel({
       {currentTabUrl && (
         <div className="mb-3">
           <p className="text-xs text-gray-500 mb-1 truncate">{currentTabUrl}</p>
+          {devices.length === 0 ? (
+            <p className="text-xs text-gray-400 mb-2">Pair another device first.</p>
+          ) : (
+            <select
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-2"
+              value={recipientId}
+              onChange={(e) => setRecipientId(e.target.value)}
+            >
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  Send to: {d.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={() => void sendCurrentTab()}
-            disabled={sending}
+            disabled={sending || devices.length === 0}
             className="w-full bg-indigo-600 text-white rounded px-3 py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
           >
             {sending ? 'Sending…' : 'Send this tab'}

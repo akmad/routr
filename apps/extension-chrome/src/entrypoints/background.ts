@@ -33,9 +33,9 @@ export default defineBackground(() => {
 
   // Listen for messages from popup.
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
-    const m = msg as { type: string; url?: string };
+    const m = msg as { type: string; url?: string; recipientId?: string };
     if (m.type === 'send_url' && m.url) {
-      sendUrl(m.url)
+      sendUrl(m.url, m.recipientId)
         .then(() => sendResponse({ ok: true }))
         .catch((e: unknown) => sendResponse({ ok: false, error: String(e) }));
       return true; // keep channel open for async response
@@ -122,7 +122,7 @@ export default defineBackground(() => {
     }
   }
 
-  async function sendUrl(url: string) {
+  async function sendUrl(url: string, recipientId?: string) {
     const identity = await loadIdentity();
     if (!identity) throw new Error('Not set up');
 
@@ -131,9 +131,10 @@ export default defineBackground(() => {
     const others = devices.filter((d) => d.id !== identity.deviceId);
     if (others.length === 0) throw new Error('No other devices to send to');
 
-    // For now: send to the first other device.
-    const recipient = others[0];
-    if (!recipient) throw new Error('No recipient');
+    // Caller can pick; otherwise fall back to the first other device (used by
+    // the context menu items which don't have a UI to pick from).
+    const recipient = recipientId ? others.find((d) => d.id === recipientId) : others[0];
+    if (!recipient) throw new Error('Recipient not found');
 
     const {
       bytesToB64u: b64u,
