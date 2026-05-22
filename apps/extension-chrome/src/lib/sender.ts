@@ -22,34 +22,32 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 function buildAndSignEnvelope(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   plaintext: Uint8Array,
-  kind: 'url' | 'file',
+  kind: 'url' | 'file' | 'note',
 ) {
+  if (recipients.length === 0) throw new Error('no recipients');
   const { payloadKey, ciphertext } = encryptPayload(plaintext);
   const ephem = generateEphemeral();
-  const recipientKexPub = b64uToBytes(recipient.kexPub);
-  const wrapped = wrapKey(
-    payloadKey,
-    ephem.secretKey,
-    ephem.publicKey,
-    recipientKexPub,
-    recipient.id,
-  );
-
+  const wrappedKeys: Record<string, string> = {};
+  for (const r of recipients) {
+    const recipientKexPub = b64uToBytes(r.kexPub);
+    const wrapped = wrapKey(payloadKey, ephem.secretKey, ephem.publicKey, recipientKexPub, r.id);
+    wrappedKeys[r.id] = bytesToB64u(wrapped);
+  }
   const now = Date.now();
   const envelope = {
     v: PROTOCOL_VERSION,
     id: '',
     from: identity.deviceId,
-    to: [recipient.id],
+    to: recipients.map((r) => r.id),
     createdAt: now,
     expiresAt: now + 86400_000,
     kind,
     size: plaintext.length,
     ciphertext: bytesToB64u(ciphertext),
     senderEphemeralPub: bytesToB64u(ephem.publicKey),
-    wrappedKeys: { [recipient.id]: bytesToB64u(wrapped) },
+    wrappedKeys,
     signature: '',
   };
   const signedForm = canonicalize(
@@ -72,22 +70,34 @@ async function postEnvelope(identity: StoredIdentity, envelope: unknown): Promis
 
 export async function sendUrl(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   url: string,
 ): Promise<void> {
   const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
-  await postEnvelope(identity, buildAndSignEnvelope(identity, recipient, plaintext, 'url'));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'url'));
+}
+
+export async function sendNote(
+  identity: StoredIdentity,
+  recipients: Recipient[],
+  text: string,
+  title?: string,
+): Promise<void> {
+  const payload: { kind: 'note'; text: string; title?: string } = { kind: 'note', text };
+  if (title) payload.title = title;
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'note'));
 }
 
 /**
  * File send: encrypt file under a fresh key, upload as a blob, then send
- * an envelope whose payload carries the blob ID + the file key.
- * `data` is the raw plaintext bytes; `mime` and `filename` end up in the
- * envelope payload (E2EE), never visible to the server.
+ * an envelope whose payload carries the blob ID + the file key. All
+ * recipients share the same blob; each gets the file key wrapped under
+ * their own X25519 key.
  */
 export async function sendFile(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   data: Uint8Array,
   filename: string,
   mime: string,
@@ -125,5 +135,5 @@ export async function sendFile(
     fileKey: bytesToB64u(fileKey),
   };
   const payloadBytes = new TextEncoder().encode(JSON.stringify(filePayload));
-  await postEnvelope(identity, buildAndSignEnvelope(identity, recipient, payloadBytes, 'file'));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, payloadBytes, 'file'));
 }

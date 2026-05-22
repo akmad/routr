@@ -240,13 +240,13 @@ export default defineBackground(() => {
   async function sendUrl(url: string, recipientId?: string) {
     const id = await loadIdentity();
     const { identity, recipient } = await resolveRecipient(id, recipientId, url);
-    await senderSendUrl(identity, recipient, url);
+    await senderSendUrl(identity, [recipient], url);
   }
 
   async function sendFile(data: Uint8Array, filename: string, mime: string, recipientId?: string) {
     const id = await loadIdentity();
     const { identity, recipient } = await resolveRecipient(id, recipientId);
-    await senderSendFile(identity, recipient, data, filename, mime);
+    await senderSendFile(identity, [recipient], data, filename, mime);
   }
 
   void connectWs();
