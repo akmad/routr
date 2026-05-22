@@ -34,3 +34,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Build (catches Vite/WXT regressions that typecheck misses)
+        run: pnpm build
