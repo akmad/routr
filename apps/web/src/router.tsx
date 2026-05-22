@@ -331,7 +331,11 @@ function InboxPage() {
     sock.onRevoked = () => void handleRevoked();
     sock.onEnvelope = (env) => {
       const item = decryptEnvelope(env, identity.kexSecretKey, identity.deviceId);
-      setItems((prev) => [item, ...prev]);
+      // Dedupe by envelope id. The server can race-deliver an envelope
+      // both via live push and via the drain on reconnect; React keys
+      // dedupe visually but the underlying state would otherwise hold
+      // duplicates and ack twice.
+      setItems((prev) => (prev.some((it) => it.id === item.id) ? prev : [item, ...prev]));
       // Only ack on successful decryption — if the local keystore is somehow
       // out of sync, we don't want to ack-and-lose. Failed envelopes stay
       // in the inbox until expiresAt, giving us another chance after a
