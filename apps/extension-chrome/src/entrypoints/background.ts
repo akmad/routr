@@ -96,13 +96,17 @@ export default defineBackground(() => {
 
   let ws: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelayMs = 1000;
+  const MAX_BACKOFF_MS = 60_000;
 
   function scheduleReconnect() {
     if (reconnectTimer) return;
+    const delay = reconnectDelayMs;
+    reconnectDelayMs = Math.min(delay * 2, MAX_BACKOFF_MS);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       void connectWs();
-    }, 5000);
+    }, delay);
   }
 
   async function connectWs() {
@@ -124,6 +128,9 @@ export default defineBackground(() => {
             signature: bytesToB64u(sigBytes),
           }),
         );
+      } else if (msg.type === 'authenticated') {
+        // Successful handshake — reset backoff so a future drop reconnects fast.
+        reconnectDelayMs = 1000;
       } else if (msg.type === 'envelope') {
         const { type: _t, ...rest } = msg;
         void handleEnvelope(rest as unknown as InboxMessage, identity);
