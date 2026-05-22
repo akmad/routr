@@ -751,6 +751,10 @@ function SettingsPage() {
       >
         Forget this device
       </button>
+      <p className="text-xs text-gray-400 mt-1">
+        Clears local keys only. To remove this device from the server (so it can't receive
+        messages), open the Beam app on a different device and revoke it from there.
+      </p>
     </div>
   );
 }
