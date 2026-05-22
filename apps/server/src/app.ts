@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
+import { rateLimit } from './middleware/rate-limit.js';
 import { blobsRoute } from './routes/blobs.js';
 import { devicesRoute } from './routes/devices.js';
 import { envelopesRoute } from './routes/envelopes.js';
@@ -23,6 +24,8 @@ export type AppDeps = {
   log: Logger;
   registry?: ConnectionRegistry;
   blobStorageDir?: string;
+  /** When true, skip global rate limits — used by tests that batch-create devices. */
+  disableRateLimits?: boolean;
 };
 
 /**
@@ -44,6 +47,19 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   });
 
   const blobDir = deps.blobStorageDir ?? join(tmpdir(), `routr-blobs-${process.pid}`);
+
+  // Apply per-IP rate limits to the two unauthenticated POST endpoints that
+  // would otherwise be enumeration/spam targets. Tests can opt out.
+  if (!deps.disableRateLimits) {
+    app.use(
+      '/api/v1/devices',
+      rateLimit({ capacity: 10, refillPerSecond: 0.2 }), // 10 burst, refill 1 token / 5s
+    );
+    app.use(
+      '/api/v1/envelopes',
+      rateLimit({ capacity: 60, refillPerSecond: 1 }), // 60 burst, refill 1 / s
+    );
+  }
 
   app.route('/api/v1/devices', devicesRoute);
   app.route('/api/v1/invites', invitesRoute);

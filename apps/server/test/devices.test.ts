@@ -17,7 +17,7 @@ function makeTestApp(): { app: TestApp; db: Db } {
   const { db } = openDatabase(':memory:');
   migrate(db, { migrationsFolder: MIGRATIONS });
   const log = createLogger({ logLevel: 'fatal' });
-  const { app } = createApp({ db, log });
+  const { app } = createApp({ db, log, disableRateLimits: true });
   return { app, db };
 }
 

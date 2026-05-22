@@ -23,7 +23,7 @@ function makeTestApp(): { app: TestApp; db: Db; blobDir: string } {
   migrate(db, { migrationsFolder: MIGRATIONS });
   const log = createLogger({ logLevel: 'fatal' });
   const blobDir = mkdtempSync(join(tmpdir(), 'routr-blob-test-'));
-  const { app } = createApp({ db, log, blobStorageDir: blobDir });
+  const { app } = createApp({ db, log, blobStorageDir: blobDir, disableRateLimits: true });
   return { app, db, blobDir };
 }
 

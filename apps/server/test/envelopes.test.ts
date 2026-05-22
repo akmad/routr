@@ -39,7 +39,7 @@ function makeDb(): Db {
 function makeTestApp(): { app: Hono<AppEnv>; db: Db } {
   const db = makeDb();
   const log = createLogger({ logLevel: 'fatal' });
-  const { app } = createApp({ db, log });
+  const { app } = createApp({ db, log, disableRateLimits: true });
   return { app, db };
 }
 

@@ -6,7 +6,7 @@ import { createLogger } from '../src/logger.js';
 function makeTestApp() {
   const { db } = openDatabase(':memory:');
   const log = createLogger({ logLevel: 'fatal' });
-  const { app } = createApp({ db, log });
+  const { app } = createApp({ db, log, disableRateLimits: true });
   return app;
 }
 
