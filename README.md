@@ -1,6 +1,7 @@
 # Beam
 
-> **Status:** early development. Not yet usable. See [PLAN.md](./PLAN.md) for progress.
+> **Status:** MVP. Server + web app + Chrome extension work end-to-end on
+> a single host. See [PLAN.md](./PLAN.md) for what's done and what's next.
 
 Beam is an open-source, self-hostable replacement for PushBullet. Send URLs and
 files between your devices — phone, tablet, laptop, browser — using each
@@ -11,8 +12,76 @@ Project codename / repo / CLI: `routr`. User-facing name: **Beam**.
 
 ## What works today
 
-Nothing yet — the repo is being bootstrapped. Watch [PLAN.md](./PLAN.md) for
-the live status.
+- **Server** — Hono + SQLite, E2EE envelope routing, device-to-device WS
+  delivery, signed-request REST auth, invite-based pairing, blob storage.
+- **Web app** — `apps/web`: setup, inbox, send, devices, settings. Keys
+  in IndexedDB; live decryption in the browser.
+- **Chrome extension** — `apps/extension-chrome`: popup "Send this tab",
+  context-menu items, background WS with desktop notifications on incoming.
+
+## Self-hosting (Docker)
+
+```bash
+git clone https://github.com/akmad/routr.git
+cd routr
+docker compose up -d
+```
+
+The server listens on `:3000`. The first device to register becomes the
+admin (no invite needed); after that, new devices require an invite from
+an existing one.
+
+To run without Docker (Node 22+):
+
+```bash
+pnpm install
+pnpm --filter @routr/server start
+```
+
+Environment variables (all optional):
+
+| Var | Default | Purpose |
+|---|---|---|
+| `PORT` | `8080` | HTTP listen port |
+| `HOST` | `0.0.0.0` | Bind address |
+| `DATABASE_URL` | `data/routr.db` | SQLite file path (or `:memory:`) |
+| `BLOB_STORAGE_DIR` | `data/blobs` | Where opaque blob files live |
+| `LOG_LEVEL` | `info` | pino log level |
+
+### Reverse proxy + HTTPS
+
+Terminate TLS in front of Beam — it speaks plain HTTP/WS. Caddyfile:
+
+```
+beam.example.com {
+  reverse_proxy localhost:3000
+}
+```
+
+Or with nginx, make sure to forward the `Upgrade` and `Connection`
+headers so `/api/v1/ws` works:
+
+```nginx
+location /api/v1/ws {
+  proxy_pass http://localhost:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+location / {
+  proxy_pass http://localhost:3000;
+  proxy_set_header Host $host;
+}
+```
+
+### First-run
+
+1. Open `https://your-beam.example.com` (the web app), or load the
+   Chrome extension's popup.
+2. Enter your server URL, leave the invite code blank — you're the
+   first device, so you bootstrap the admin account.
+3. To pair another device: open **Devices**, click *Generate invite*,
+   and paste that code into the new device's setup screen.
 
 ## Planned (v1.0)
 

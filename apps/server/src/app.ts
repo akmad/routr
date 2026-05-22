@@ -1,6 +1,9 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
+import { blobsRoute } from './routes/blobs.js';
 import { devicesRoute } from './routes/devices.js';
 import { envelopesRoute } from './routes/envelopes.js';
 import { invitesRoute } from './routes/invites.js';
@@ -19,6 +22,7 @@ export type AppDeps = {
   db: Db;
   log: Logger;
   registry?: ConnectionRegistry;
+  blobStorageDir?: string;
 };
 
 /**
@@ -39,9 +43,12 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
     return c.json({ ok: true, service: 'routr', version: 1 });
   });
 
+  const blobDir = deps.blobStorageDir ?? join(tmpdir(), `routr-blobs-${process.pid}`);
+
   app.route('/api/v1/devices', devicesRoute);
   app.route('/api/v1/invites', invitesRoute);
   app.route('/api/v1/envelopes', envelopesRoute(registry));
+  app.route('/api/v1/blobs', blobsRoute(blobDir));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

@@ -40,9 +40,8 @@ Bigger features are broken into items here before being started.
 
 ## Backlog (scoped, not started)
 
-### Milestone 1 — Server skeleton
-- [ ] **M1.8** Blob upload + download: chunked PUT, range GET, integrity
-  hash check.
+### Milestone 4 — Polish
+- [ ] **M4.3** Security review pass on crypto code paths.
 
 ### Milestone 3 — Chrome extension
 
@@ -80,6 +79,9 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
+- **M4.2** Self-host docs in README (Docker, nginx/Caddy reverse proxy, env vars, first-run pairing).
+- **M4.1** Playwright E2E API test: full register → send → ack round-trip over HTTP.
+- **M1.8** Blob storage: POST/GET/HEAD `/api/v1/blobs`, SHA-256 verification on upload, 25 MB cap, on-disk storage at `BLOB_STORAGE_DIR`. 7 endpoint tests.
 - **M3.5** Background WS + notifications + context menu. MV3 Chrome extension fully functional.
 - **M3.4** Context menu: "Send link with Beam" + "Send this tab with Beam".
 - **M3.3** Toolbar popup: "Send this tab" button, E2EE encrypt + POST.

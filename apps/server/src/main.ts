@@ -16,7 +16,7 @@ function main(): void {
   runMigrations(config.databaseUrl);
   const { db } = openDatabase(config.databaseUrl);
 
-  const { app, registry } = createApp({ db, log });
+  const { app, registry } = createApp({ db, log, blobStorageDir: config.blobStorageDir });
 
   // WebSocket upgrade must be injected before calling serve().
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
