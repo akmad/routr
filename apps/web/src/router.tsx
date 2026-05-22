@@ -29,6 +29,7 @@ import {
   suggestDevice,
 } from './lib/rules.js';
 import { sendFile, sendNote, sendUrl } from './lib/sender.js';
+import { type SentItem, clearSent, listSent } from './lib/sent.js';
 import { BeamSocket, type InboxMessage } from './lib/ws.js';
 import { setupIdentity, useIdentity } from './stores/identity.js';
 
@@ -52,6 +53,13 @@ function RootLayout() {
           className="hover:text-indigo-600"
         >
           Send
+        </Link>
+        <Link
+          to="/sent"
+          activeProps={{ className: 'text-indigo-600' }}
+          className="hover:text-indigo-600"
+        >
+          Sent
         </Link>
         <Link
           to="/devices"
@@ -759,6 +767,69 @@ function SettingsPage() {
   );
 }
 
+// ─── Sent page ───────────────────────────────────────────────────────────────
+
+function SentPage() {
+  const identity = useIdentity();
+  const [items, setItems] = useState<SentItem[]>([]);
+  const [devList, setDevList] = useState<DeviceInfo[]>([]);
+
+  useEffect(() => {
+    void listSent().then(setItems);
+    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
+      .then((r) => r.json())
+      .then((d) => setDevList(d as DeviceInfo[]))
+      .catch(() => {});
+  }, [identity]);
+
+  const deviceName = (id: string) => devList.find((d) => d.id === id)?.name ?? `${id.slice(0, 8)}…`;
+
+  async function onClearAll() {
+    if (!confirm('Clear local sent log? This only affects this device.')) return;
+    await clearSent();
+    setItems([]);
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-start mb-1">
+        <h1 className="text-xl font-semibold">Sent</h1>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void onClearAll()}
+            className="text-xs text-red-500 hover:underline"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        Local log of what this device has sent. Server doesn't keep this — only you do.
+      </p>
+      {items.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">Nothing sent yet.</p>
+      ) : (
+        <ul className="space-y-3">
+          {items.map((it) => (
+            <li key={it.id} className="bg-white border border-gray-200 rounded-lg p-4">
+              <p className="text-sm break-all">
+                {it.kind === 'file' && '📎 '}
+                {it.kind === 'note' && '📝 '}
+                {it.summary}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                to {it.recipientIds.map(deviceName).join(', ')} &middot;{' '}
+                {new Date(it.at).toLocaleString()}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Rules page ──────────────────────────────────────────────────────────────
 
 function RulesPage() {
@@ -971,6 +1042,12 @@ const sendRoute = createRoute({
   component: SendPage,
 });
 
+const sentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sent',
+  component: SentPage,
+});
+
 const devicesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/devices',
@@ -994,6 +1071,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   inboxRoute,
   sendRoute,
+  sentRoute,
   devicesRoute,
   rulesRouteCfg,
   settingsRoute,

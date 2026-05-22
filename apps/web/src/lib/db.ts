@@ -16,13 +16,17 @@ import { openDB } from 'idb';
  * different versions cause schema-upgrade contention.
  */
 export const DB_NAME = 'beam';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export async function openBeamDb() {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) db.createObjectStore('identity');
       if (oldVersion < 2) db.createObjectStore('rules', { keyPath: 'id' });
+      if (oldVersion < 3) {
+        const sent = db.createObjectStore('sent', { keyPath: 'id' });
+        sent.createIndex('byAt', 'at');
+      }
     },
   });
 }
