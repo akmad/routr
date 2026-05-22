@@ -8,6 +8,14 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **`/api/v1/health` enrichment**: adds `gitSha`, `nodeVersion`, and
+  `startedAt` (ISO timestamp) on top of the existing fields, so an
+  operator can quickly answer "what's running on this instance?"
+  `gitSha` resolution: `BEAM_GIT_SHA` env override (used by Docker
+  builds, where `.git` isn't in the image) → `git rev-parse HEAD`
+  fallback → `'unknown'`. Dockerfile takes `--build-arg GIT_SHA=...`
+  and pipes it to `BEAM_GIT_SHA`. Existing fields are unchanged;
+  consumers that check `service === 'routr'` still pass.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

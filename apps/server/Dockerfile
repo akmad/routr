@@ -22,6 +22,13 @@ COPY packages/crypto/ packages/crypto/
 COPY packages/protocol/ packages/protocol/
 COPY apps/server/ apps/server/
 
+# Build-time identification surfaced on /health for "what's running on
+# this instance?" — pass with `docker build --build-arg GIT_SHA=$(git
+# rev-parse HEAD) ...`. Empty string is fine; the server falls back to
+# 'unknown' when neither this env nor a usable .git is available.
+ARG GIT_SHA=""
+ENV BEAM_GIT_SHA=$GIT_SHA
+
 EXPOSE 3000
 ENV PORT=3000
 ENV DATABASE_URL=/data/beam.db

@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
+import { type BuildInfo, captureBuildInfo } from './build-info.js';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
@@ -29,6 +30,8 @@ export type AppDeps = {
   blobStorageDir?: string;
   /** When true, skip global rate limits — used by tests that batch-create devices. */
   disableRateLimits?: boolean;
+  /** Optional pre-captured build info; defaults to captureBuildInfo() at app construction time. */
+  buildInfo?: BuildInfo;
 };
 
 /**
@@ -47,6 +50,7 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
     await next();
   });
 
+  const buildInfo = deps.buildInfo ?? captureBuildInfo();
   const startedAt = Date.now();
   app.get('/api/v1/health', (c) => {
     return c.json({
@@ -54,6 +58,9 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
       service: 'routr',
       version: 1,
       uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+      gitSha: buildInfo.gitSha,
+      nodeVersion: buildInfo.nodeVersion,
+      startedAt: buildInfo.startedAt,
     });
   });
 
