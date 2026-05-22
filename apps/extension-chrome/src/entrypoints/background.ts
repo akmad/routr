@@ -1,6 +1,7 @@
 import { b64uToBytes, bytesToB64u, decryptPayload, sign, unwrapKey } from '@routr/crypto';
 import { signedFetch } from '../lib/api.js';
 import { loadIdentity } from '../lib/keystore.js';
+import { listRules, suggestDevice } from '../lib/rules.js';
 import type { InboxMessage } from '../lib/ws.js';
 
 export default defineBackground(() => {
@@ -131,10 +132,19 @@ export default defineBackground(() => {
     const others = devices.filter((d) => d.id !== identity.deviceId);
     if (others.length === 0) throw new Error('No other devices to send to');
 
-    // Caller can pick; otherwise fall back to the first other device (used by
-    // the context menu items which don't have a UI to pick from).
-    const recipient = recipientId ? others.find((d) => d.id === recipientId) : others[0];
-    if (!recipient) throw new Error('Recipient not found');
+    // Resolution order: explicit recipientId from caller (popup picked) >
+    // routing-rule match > first-other-device fallback (context-menu default).
+    let resolved: (typeof others)[number] | undefined;
+    if (recipientId) {
+      resolved = others.find((d) => d.id === recipientId);
+    } else {
+      const rules = await listRules();
+      const ruleMatch = suggestDevice(rules, url);
+      if (ruleMatch) resolved = others.find((d) => d.id === ruleMatch);
+      if (!resolved) resolved = others[0];
+    }
+    if (!resolved) throw new Error('Recipient not found');
+    const recipient = resolved;
 
     const {
       bytesToB64u: b64u,

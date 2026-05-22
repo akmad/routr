@@ -14,6 +14,10 @@ export default defineConfig({
       default_title: 'Beam',
       default_popup: 'popup.html',
     },
+    options_ui: {
+      page: 'options.html',
+      open_in_tab: true,
+    },
   },
   vite: () => ({
     plugins: [react(), tailwindcss()],

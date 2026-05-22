@@ -7,6 +7,7 @@ import {
   loadIdentity,
   saveIdentity,
 } from '../../lib/keystore.js';
+import { listRules, suggestDevice } from '../../lib/rules.js';
 
 type Device = { id: string; name: string; kexPub: string; signPub: string };
 
@@ -169,16 +170,31 @@ function ReadyPanel({
   const [devices, setDevices] = useState<Device[]>([]);
   const [recipientId, setRecipientId] = useState('');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentTabUrl drives rule pre-selection
   useEffect(() => {
-    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
-      .then((r) => r.json())
-      .then((data) => {
-        const others = (data as Device[]).filter((d) => d.id !== identity.deviceId);
+    void (async () => {
+      try {
+        const res = await signedFetch(identity, '/api/v1/devices', { method: 'GET' });
+        const list = (await res.json()) as Device[];
+        const others = list.filter((d) => d.id !== identity.deviceId);
         setDevices(others);
-        if (others.length > 0 && !recipientId) setRecipientId(others[0]?.id ?? '');
-      })
-      .catch(() => {});
-  }, [identity, recipientId]);
+        if (others.length === 0) return;
+
+        // Try to pre-select via a routing rule if we have a current URL.
+        if (currentTabUrl) {
+          const rules = await listRules();
+          const target = suggestDevice(rules, currentTabUrl);
+          if (target && others.some((d) => d.id === target)) {
+            setRecipientId(target);
+            return;
+          }
+        }
+        if (!recipientId) setRecipientId(others[0]?.id ?? '');
+      } catch {
+        // ignore — UI just shows "Pair another device first"
+      }
+    })();
+  }, [identity, currentTabUrl]);
 
   async function sendCurrentTab() {
     setSending(true);
