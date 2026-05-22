@@ -27,34 +27,36 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 function buildAndSignEnvelope(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   plaintext: Uint8Array,
   kind: 'url' | 'file',
 ) {
+  if (recipients.length === 0) throw new Error('no recipients');
   const { payloadKey, ciphertext } = encryptPayload(plaintext);
   const ephem = generateEphemeral();
-  const recipientKexPub = b64uToBytes(recipient.kexPub);
-  const wrapped = wrapKey(
-    payloadKey,
-    ephem.secretKey,
-    ephem.publicKey,
-    recipientKexPub,
-    recipient.id,
-  );
+
+  // Each recipient gets the payload key wrapped under their own X25519 key,
+  // binding the wrap to their device ID via HKDF info.
+  const wrappedKeys: Record<string, string> = {};
+  for (const r of recipients) {
+    const recipientKexPub = b64uToBytes(r.kexPub);
+    const wrapped = wrapKey(payloadKey, ephem.secretKey, ephem.publicKey, recipientKexPub, r.id);
+    wrappedKeys[r.id] = bytesToB64u(wrapped);
+  }
 
   const now = Date.now();
   const envelope = {
     v: PROTOCOL_VERSION,
     id: '',
     from: identity.deviceId,
-    to: [recipient.id],
+    to: recipients.map((r) => r.id),
     createdAt: now,
     expiresAt: now + 86400_000,
     kind,
     size: plaintext.length,
     ciphertext: bytesToB64u(ciphertext),
     senderEphemeralPub: bytesToB64u(ephem.publicKey),
-    wrappedKeys: { [recipient.id]: bytesToB64u(wrapped) },
+    wrappedKeys,
     signature: '',
   };
   const signedForm = canonicalize(
@@ -77,21 +79,21 @@ async function postEnvelope(identity: StoredIdentity, envelope: unknown): Promis
 
 export async function sendUrl(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   url: string,
 ): Promise<void> {
   const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
-  await postEnvelope(identity, buildAndSignEnvelope(identity, recipient, plaintext, 'url'));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'url'));
 }
 
 /**
  * Encrypts the file, uploads the ciphertext as a blob, then sends an envelope
- * whose payload references the blob ID. The recipient fetches the blob,
- * decrypts it, and surfaces a download.
+ * whose payload references the blob ID. All recipients share the same blob;
+ * each gets the file key wrapped under their own X25519 key.
  */
 export async function sendFile(
   identity: StoredIdentity,
-  recipient: Recipient,
+  recipients: Recipient[],
   file: File,
 ): Promise<void> {
   // 1. Read the file once.
@@ -136,5 +138,5 @@ export async function sendFile(
     fileKey: bytesToB64u(fileKey),
   };
   const payloadBytes = new TextEncoder().encode(JSON.stringify(filePayload));
-  await postEnvelope(identity, buildAndSignEnvelope(identity, recipient, payloadBytes, 'file'));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, payloadBytes, 'file'));
 }

@@ -369,17 +369,17 @@ function SendPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const recipient = devices.find((d) => d.id === recipientId);
-    if (!recipient) return;
+    const recipients = recipientId ? devices.filter((d) => d.id === recipientId) : devices; // empty selection = "all my devices"
+    if (recipients.length === 0) return;
     setStatus('sending');
     setErrorMsg('');
     try {
       if (mode === 'url') {
-        await sendUrl(identity, recipient, url);
+        await sendUrl(identity, recipients, url);
         setUrl('');
       } else {
         if (!file) throw new Error('No file selected');
-        await sendFile(identity, recipient, file);
+        await sendFile(identity, recipients, file);
         setFile(null);
       }
       setStatus('sent');
@@ -459,9 +459,8 @@ function SendPage() {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               value={recipientId}
               onChange={(e) => setRecipientId(e.target.value)}
-              required
             >
-              <option value="">Select device…</option>
+              <option value="">All my other devices ({devices.length})</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
