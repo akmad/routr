@@ -19,6 +19,7 @@ type ServerMsg =
   | { type: 'challenge'; nonce: string }
   | { type: 'authenticated' }
   | EnvelopeMsg
+  | { type: 'ping' }
   | { type: 'pong' };
 
 /**
@@ -66,6 +67,9 @@ export class BeamSocket {
         // it to consumers.
         const { type: _t, ...rest } = msg;
         this.onEnvelope?.(rest as InboxMessage);
+      } else if (msg.type === 'ping') {
+        // Server-initiated heartbeat — respond so it knows we're alive.
+        this.send({ type: 'pong' });
       }
     };
     this.ws.onclose = (ev) => {

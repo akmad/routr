@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bytesToB64u, generateIdentity, sign } from '@routr/crypto';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { type Db, openDatabase } from '../src/db/index.js';
 import { newId } from '../src/ids.js';
@@ -20,13 +20,16 @@ function makeDb() {
   return db;
 }
 
-function makeSession(db: Db) {
+function makeSession(
+  db: Db,
+  opts: { heartbeatIntervalMs?: number; heartbeatTimeoutMs?: number } = {},
+) {
   const registry = new ConnectionRegistry();
   const log = createLogger({ logLevel: 'fatal' });
   const sent: string[] = [];
   const closes: Array<{ code: number; reason?: string }> = [];
   const session = new WsSession(
-    { db, log, registry },
+    { db, log, registry, ...opts },
     {
       send: (t) => sent.push(t),
       close: (code, reason) => closes.push({ code, reason }),
@@ -231,5 +234,110 @@ describe('WsSession', () => {
     const lastFrame = JSON.parse(sent[sent.length - 1] as string) as { type: string };
     // Regression guard: clients only listen for type === 'envelope'.
     expect(lastFrame.type).toBe('envelope');
+  });
+});
+
+describe('WsSession heartbeat', () => {
+  let db: Db;
+
+  beforeEach(() => {
+    db = makeDb();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function authedSession(opts: { heartbeatIntervalMs: number; heartbeatTimeoutMs: number }) {
+    const id = generateIdentity();
+    const reg = registerDevice(db, {
+      name: 'test',
+      platform: 'web',
+      signPub: bytesToB64u(id.sign.publicKey),
+      kexPub: bytesToB64u(id.kex.publicKey),
+    });
+    if (!reg.ok) throw new Error('setup failed');
+
+    const { session, sent, closes, registry } = makeSession(db, opts);
+    session.start();
+    const nonce = (JSON.parse(sent[0] as string) as { nonce: string }).nonce;
+    const authBytes = buildWsAuthMessage(reg.deviceId, nonce);
+    session.onMessage(
+      JSON.stringify({
+        type: 'auth',
+        deviceId: reg.deviceId,
+        signature: bytesToB64u(sign(id.sign.secretKey, authBytes)),
+      }),
+    );
+    return { session, sent, closes, registry, deviceId: reg.deviceId };
+  }
+
+  it('emits server→client pings on the configured cadence', () => {
+    const { sent } = authedSession({ heartbeatIntervalMs: 1000, heartbeatTimeoutMs: 10_000 });
+    // No pings yet.
+    expect(sent.filter((s) => s.includes('"ping"'))).toHaveLength(0);
+
+    vi.advanceTimersByTime(1000);
+    expect(sent.filter((s) => s.includes('"ping"'))).toHaveLength(1);
+
+    vi.advanceTimersByTime(1000);
+    expect(sent.filter((s) => s.includes('"ping"'))).toHaveLength(2);
+
+    vi.advanceTimersByTime(3000);
+    expect(sent.filter((s) => s.includes('"ping"'))).toHaveLength(5);
+  });
+
+  it('closes 4005 when no inbound message arrives within the timeout', () => {
+    const { closes, session } = authedSession({
+      heartbeatIntervalMs: 10_000, // pings won't fire before the timeout
+      heartbeatTimeoutMs: 500,
+    });
+    expect(closes).toHaveLength(0);
+    vi.advanceTimersByTime(499);
+    expect(closes).toHaveLength(0);
+    vi.advanceTimersByTime(2);
+    expect(closes[0]?.code).toBe(4005);
+    expect(closes[0]?.reason).toBe('heartbeat_timeout');
+    session.onClose();
+  });
+
+  it('any inbound message resets the dead timer', () => {
+    const { closes, session } = authedSession({
+      heartbeatIntervalMs: 10_000,
+      heartbeatTimeoutMs: 500,
+    });
+    vi.advanceTimersByTime(400);
+    // Client checks in with a pong — keeps us alive.
+    session.onMessage(JSON.stringify({ type: 'pong' }));
+    vi.advanceTimersByTime(400);
+    expect(closes).toHaveLength(0);
+    // Now stop replying — should die.
+    vi.advanceTimersByTime(200);
+    expect(closes[0]?.code).toBe(4005);
+  });
+
+  it('a client pong silently resets the timer (no echo, no close)', () => {
+    const { sent, closes, session } = authedSession({
+      heartbeatIntervalMs: 10_000,
+      heartbeatTimeoutMs: 500,
+    });
+    const before = sent.length;
+    session.onMessage(JSON.stringify({ type: 'pong' }));
+    // Pong itself emits nothing — it's pure liveness.
+    expect(sent.length).toBe(before);
+    expect(closes).toHaveLength(0);
+  });
+
+  it('onClose stops heartbeat and dead timers', () => {
+    const { sent, session } = authedSession({
+      heartbeatIntervalMs: 1000,
+      heartbeatTimeoutMs: 10_000,
+    });
+    session.onClose();
+    const before = sent.length;
+    vi.advanceTimersByTime(5000);
+    // No additional pings emitted after onClose.
+    expect(sent.length).toBe(before);
   });
 });

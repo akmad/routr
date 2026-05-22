@@ -8,6 +8,14 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **WebSocket heartbeat (server→client ping/pong)**: after auth, the
+  server pings each connected client every 30s and evicts the session
+  with close code 4005 `heartbeat_timeout` if no message arrives
+  within 90s (three missed pings). The web and extension clients now
+  respond to server `{type:'ping'}` with `{type:'pong'}`. Half-open
+  TCP connections — common on flaky mobile networks or NAT timeouts —
+  no longer leave devices stuck "online" in the registry. Intervals
+  are injectable via `SessionDeps` for tests; defaults are 30s/90s.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
