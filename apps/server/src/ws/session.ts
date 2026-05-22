@@ -83,6 +83,7 @@ export class WsSession {
   onClose(): void {
     if (this.state.stage === 'authed') {
       this.deps.registry.remove(this.state.conn);
+      this.deps.log.info({ deviceId: this.state.deviceId }, 'ws device disconnected');
     }
   }
 
@@ -122,6 +123,10 @@ export class WsSession {
 
     // Drain the inbox.
     const pending = listPendingFor(this.deps.db, deviceId);
+    this.deps.log.info(
+      { deviceId, userId: device.userId, pending: pending.length },
+      'ws device authenticated',
+    );
     for (const item of pending) {
       const msg: InboxEnvelopeMessage = {
         type: 'envelope',
