@@ -1,6 +1,4 @@
-import { b64uToBytes, decryptPayload, unwrapKey } from '@routr/crypto';
-import { bytesToB64u, encryptPayload, generateEphemeral, sign, wrapKey } from '@routr/crypto';
-import { PROTOCOL_VERSION, canonicalize } from '@routr/protocol';
+import { b64uToBytes, bytesToB64u, decryptPayload, sign, unwrapKey } from '@routr/crypto';
 import {
   Link,
   Navigate,
@@ -14,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { signedFetch } from './lib/api.js';
 import { clearIdentity } from './lib/keystore.js';
+import { sendFile, sendUrl } from './lib/sender.js';
 import { BeamSocket, type InboxMessage } from './lib/ws.js';
 import { setupIdentity, useIdentity } from './stores/identity.js';
 
@@ -144,6 +143,7 @@ type DecryptedItem = {
   createdAt: number;
   kind: string;
   url?: string;
+  file?: { name: string; mime: string; size: number; blobId: string; fileKey: string };
   error?: string;
 };
 
@@ -160,14 +160,31 @@ function decryptEnvelope(
     const payload = JSON.parse(new TextDecoder().decode(plaintext)) as {
       kind: string;
       url?: string;
+      filename?: string;
+      mime?: string;
+      size?: number;
+      blobId?: string;
+      fileKey?: string;
     };
-    return {
+    const base = {
       id: msg.id,
       fromDevice: msg.fromDevice,
       createdAt: msg.createdAt,
       kind: msg.kind,
-      url: payload.url,
     };
+    if (payload.kind === 'file' && payload.blobId && payload.fileKey && payload.filename) {
+      return {
+        ...base,
+        file: {
+          name: payload.filename,
+          mime: payload.mime ?? 'application/octet-stream',
+          size: payload.size ?? 0,
+          blobId: payload.blobId,
+          fileKey: payload.fileKey,
+        },
+      };
+    }
+    return { ...base, url: payload.url };
   } catch {
     return {
       id: msg.id,
@@ -177,6 +194,38 @@ function decryptEnvelope(
       error: 'Decryption failed',
     };
   }
+}
+
+async function downloadAndDecryptFile(
+  identity: { serverUrl: string; deviceId: string; signSecretKey: Uint8Array },
+  file: { name: string; mime: string; blobId: string; fileKey: string },
+): Promise<void> {
+  // Fetch the blob via signed GET.
+  const path = `/api/v1/blobs/${file.blobId}`;
+  const ts = String(Date.now());
+  const emptyHash = '';
+  // Empty body: hex(sha256("")) = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  const sigInput = `GET\n${path}\n${ts}\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n`;
+  const sigBytes = sign(identity.signSecretKey, new TextEncoder().encode(sigInput));
+  const authHeader = `Beam-Sig deviceId="${identity.deviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`;
+  void emptyHash;
+
+  const res = await fetch(`${identity.serverUrl}${path}`, {
+    headers: { authorization: authHeader },
+  });
+  if (!res.ok) throw new Error(`blob fetch failed: ${res.status}`);
+  const encrypted = new Uint8Array(await res.arrayBuffer());
+  const fileKey = b64uToBytes(file.fileKey);
+  const plaintext = decryptPayload(fileKey, encrypted);
+
+  // Trigger a browser download.
+  const blob = new Blob([plaintext as BlobPart], { type: file.mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function InboxPage() {
@@ -225,6 +274,17 @@ function InboxPage() {
               >
                 {item.url}
               </a>
+            ) : item.kind === 'file' && item.file ? (
+              <button
+                type="button"
+                onClick={() => void downloadAndDecryptFile(identity, item.file!)}
+                className="text-indigo-600 hover:underline text-sm break-all text-left"
+              >
+                📎 {item.file.name}{' '}
+                <span className="text-gray-400 text-xs">
+                  ({Math.round(item.file.size / 1024)} KB)
+                </span>
+              </button>
             ) : (
               <p className="text-sm text-gray-600">Unsupported type: {item.kind}</p>
             )}
@@ -245,7 +305,9 @@ type Device = { id: string; name: string; kexPub: string };
 
 function SendPage() {
   const identity = useIdentity();
+  const [mode, setMode] = useState<'url' | 'file'>('url');
   const [url, setUrl] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [recipientId, setRecipientId] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -265,50 +327,15 @@ function SendPage() {
     setStatus('sending');
     setErrorMsg('');
     try {
-      const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
-      const { payloadKey, ciphertext } = encryptPayload(plaintext);
-      const ephem = generateEphemeral();
-      // Decode base64url kexPub
-      const b64 = recipient.kexPub.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
-      const recipientKexPub = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-      const wrapped = wrapKey(
-        payloadKey,
-        ephem.secretKey,
-        ephem.publicKey,
-        recipientKexPub,
-        recipient.id,
-      );
-
-      const now = Date.now();
-      const envelope = {
-        v: PROTOCOL_VERSION,
-        id: '',
-        from: identity.deviceId,
-        to: [recipient.id],
-        createdAt: now,
-        expiresAt: now + 86400_000,
-        kind: 'url' as const,
-        size: plaintext.length,
-        ciphertext: bytesToB64u(ciphertext),
-        senderEphemeralPub: bytesToB64u(ephem.publicKey),
-        wrappedKeys: { [recipient.id]: bytesToB64u(wrapped) },
-        signature: '',
-      };
-      const signedForm = canonicalize(
-        Object.fromEntries(
-          Object.entries(envelope).filter(([k]) => k !== 'id' && k !== 'signature'),
-        ),
-      );
-      const sig = sign(identity.signSecretKey, new TextEncoder().encode(signedForm));
-      const res = await signedFetch(identity, '/api/v1/envelopes', {
-        method: 'POST',
-        body: JSON.stringify({ ...envelope, signature: bytesToB64u(sig) }),
-      });
-      if (!res.ok)
-        throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
+      if (mode === 'url') {
+        await sendUrl(identity, recipient, url);
+        setUrl('');
+      } else {
+        if (!file) throw new Error('No file selected');
+        await sendFile(identity, recipient, file);
+        setFile(null);
+      }
       setStatus('sent');
-      setUrl('');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Send failed');
@@ -319,21 +346,57 @@ function SendPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Send</h1>
+      <div className="flex gap-1 mb-4 border border-gray-200 rounded p-1 bg-white text-sm">
+        <button
+          type="button"
+          onClick={() => setMode('url')}
+          className={`flex-1 px-3 py-1.5 rounded ${mode === 'url' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          URL
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('file')}
+          className={`flex-1 px-3 py-1.5 rounded ${mode === 'file' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          File
+        </button>
+      </div>
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
-        <div>
-          <label htmlFor="send-url" className="block text-sm font-medium mb-1">
-            URL
-          </label>
-          <input
-            id="send-url"
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://…"
-            required
-          />
-        </div>
+        {mode === 'url' ? (
+          <div>
+            <label htmlFor="send-url" className="block text-sm font-medium mb-1">
+              URL
+            </label>
+            <input
+              id="send-url"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://…"
+              required
+            />
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="send-file" className="block text-sm font-medium mb-1">
+              File
+            </label>
+            <input
+              id="send-file"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm file:mr-3 file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded file:px-3 file:py-1"
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              required
+            />
+            {file && (
+              <p className="text-xs text-gray-500 mt-1">
+                {file.name} &middot; {Math.round(file.size / 1024)} KB
+              </p>
+            )}
+          </div>
+        )}
         <div>
           <label htmlFor="send-to" className="block text-sm font-medium mb-1">
             Send to
