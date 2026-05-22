@@ -25,6 +25,14 @@ export function Popup() {
     void browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.url) setCurrentTabUrl(tab.url);
     });
+
+    // Tell the background to clear the unread badge. The badge is a
+    // "messages since you last opened me" counter; opening the popup is
+    // exactly the trigger that resets it.
+    void browser.runtime.sendMessage({ type: 'popup_opened' }).catch(() => {
+      // Background may not be running yet during cold-start of the popup
+      // itself; the next popup-open call will retry.
+    });
   }, []);
 
   if (state.tag === 'loading') {

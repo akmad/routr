@@ -8,6 +8,13 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Unread badge on the extension toolbar icon**: when envelopes arrive
+  while the popup isn't open, an indigo badge with the count appears on
+  the Chrome/Firefox toolbar icon (capped at "99+"). Opening the popup
+  clears it. In-memory state in the background service worker — no
+  storage round-trips, no IndexedDB. Survives notifications-API
+  failures (e.g. muted OS toasts): the badge bumps regardless so the
+  user still sees there's something new.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

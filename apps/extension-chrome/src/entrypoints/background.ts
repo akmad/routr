@@ -8,6 +8,32 @@ import type { InboxMessage } from '../lib/ws.js';
 type ServerDevice = { id: string; name: string; kexPub: string };
 
 export default defineBackground(() => {
+  // ─── Unread badge state ──────────────────────────────────────────────────
+  // Lives in memory only; if the service worker is evicted we lose the
+  // count, which is fine — the value is "unread since you last looked at
+  // the popup", not a durable counter.
+  let unreadCount = 0;
+  function renderBadge() {
+    const text = unreadCount === 0 ? '' : unreadCount > 99 ? '99+' : String(unreadCount);
+    try {
+      void browser.action.setBadgeText({ text });
+      if (unreadCount > 0) {
+        void browser.action.setBadgeBackgroundColor({ color: '#4f46e5' }); // indigo-600
+      }
+    } catch {
+      // setBadgeText is absent in some webextension contexts; ignore.
+    }
+  }
+  function bumpUnread() {
+    unreadCount += 1;
+    renderBadge();
+  }
+  function clearUnread() {
+    if (unreadCount === 0) return;
+    unreadCount = 0;
+    renderBadge();
+  }
+
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
       id: 'beam-send-link',
@@ -115,6 +141,12 @@ export default defineBackground(() => {
         .catch((e: unknown) => sendResponse({ ok: false, error: String(e) }));
       return true;
     }
+    if (m.type === 'popup_opened') {
+      // Popup mounted — user is now looking at the inbox, so wipe the badge.
+      clearUnread();
+      sendResponse({ ok: true });
+      return false;
+    }
     return false;
   });
 
@@ -197,6 +229,7 @@ export default defineBackground(() => {
     }
 
     // Step 2: surface a notification. Failing here shouldn't block the ack.
+    let surfaced = false;
     try {
       if (payload.kind === 'url' && payload.url) {
         await browser.notifications.create({
@@ -205,6 +238,7 @@ export default defineBackground(() => {
           title: 'Beam',
           message: payload.url,
         });
+        surfaced = true;
       } else if (payload.kind === 'file' && payload.filename) {
         await browser.notifications.create({
           type: 'basic',
@@ -212,6 +246,7 @@ export default defineBackground(() => {
           title: 'Beam — file received',
           message: `${payload.filename} — open the Beam web app to download`,
         });
+        surfaced = true;
       } else if (payload.kind === 'note' && payload.text) {
         await browser.notifications.create({
           type: 'basic',
@@ -219,9 +254,16 @@ export default defineBackground(() => {
           title: 'Beam — note',
           message: payload.text.slice(0, 200),
         });
+        surfaced = true;
       }
     } catch {
       // notification API may be missing in some contexts; ignore.
+    }
+
+    // Bump the badge regardless of whether the OS notification fired — the
+    // user may have notifications muted but still wants to see the count.
+    if (surfaced || ['url', 'file', 'note'].includes(payload.kind)) {
+      bumpUnread();
     }
 
     // Step 3: ack.
