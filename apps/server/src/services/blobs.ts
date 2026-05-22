@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { blobs } from '../db/schema.js';
 import { newId } from '../ids.js';
@@ -98,4 +98,36 @@ export async function blobFileSize(blobDir: string, id: string): Promise<number 
   } catch {
     return null;
   }
+}
+
+/**
+ * Delete blob rows + on-disk files older than `maxAgeMs`. Schema doesn't
+ * track which envelope references which blob (envelope payload encrypts
+ * that mapping), so we age blobs out by upload time. Default keep window
+ * is 7 days — long enough for normal "send to my offline phone" cases
+ * but bounded so an abandoned uploader doesn't fill the disk.
+ */
+export async function cleanupOldBlobs(
+  db: Db,
+  blobDir: string,
+  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const stale = db.select({ id: blobs.id }).from(blobs).where(lt(blobs.uploadedAt, cutoff)).all();
+  if (stale.length === 0) return 0;
+  // Delete rows first (cheap, transactional), then unlink files lazily.
+  db.transaction((tx) => {
+    for (const row of stale) {
+      tx.delete(blobs).where(eq(blobs.id, row.id)).run();
+    }
+  });
+  // Best-effort file removal — if a file is already gone, ignore.
+  for (const row of stale) {
+    try {
+      await unlink(join(blobDir, row.id));
+    } catch {
+      // ignore
+    }
+  }
+  return stale.length;
 }

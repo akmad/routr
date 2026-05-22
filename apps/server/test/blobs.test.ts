@@ -195,3 +195,41 @@ describe('POST /api/v1/blobs + GET /api/v1/blobs/:id', () => {
     expect(headRes.headers.get('content-length')).toBe('4');
   });
 });
+
+describe('cleanupOldBlobs', () => {
+  let app: TestApp;
+  let db: Db;
+  let blobDir: string;
+
+  beforeEach(() => {
+    const t = makeTestApp();
+    app = t.app;
+    db = t.db;
+    blobDir = t.blobDir;
+  });
+
+  afterEach(() => {
+    rmSync(blobDir, { recursive: true, force: true });
+  });
+
+  it('removes blobs whose uploadedAt is older than maxAgeMs', async () => {
+    const { cleanupOldBlobs } = await import('../src/services/blobs.js');
+    const { identity, deviceId } = makeDevice(db);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    const res = await app.request('/api/v1/blobs', {
+      method: 'POST',
+      headers: {
+        'x-beam-sha256': sha,
+        'content-type': 'application/octet-stream',
+        ...signedHeaders(identity, deviceId, 'POST', '/api/v1/blobs', bytes),
+      },
+      body: bytes,
+    });
+    expect(res.status).toBe(201);
+
+    // maxAgeMs = 0 → everything is "old".
+    const n = await cleanupOldBlobs(db, blobDir, 0);
+    expect(n).toBe(1);
+  });
+});

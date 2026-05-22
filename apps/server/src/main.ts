@@ -6,6 +6,7 @@ import { openDatabase } from './db/index.js';
 import { runMigrations } from './db/migrate.js';
 import { createLogger } from './logger.js';
 import { wsRoute } from './routes/ws.js';
+import { cleanupOldBlobs } from './services/blobs.js';
 import { cleanupExpiredEnvelopes } from './services/envelopes.js';
 
 function main(): void {
@@ -30,7 +31,7 @@ function main(): void {
 
   // Sweep expired envelopes every 5 minutes. Cheap query on a small table;
   // no foreground impact.
-  const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+  const ENV_CLEANUP_MS = 5 * 60 * 1000;
   setInterval(() => {
     try {
       const n = cleanupExpiredEnvelopes(db);
@@ -38,7 +39,18 @@ function main(): void {
     } catch (err) {
       log.error({ err }, 'envelope cleanup failed');
     }
-  }, CLEANUP_INTERVAL_MS).unref();
+  }, ENV_CLEANUP_MS).unref();
+
+  // Sweep old blobs once an hour (default 7-day max age inside the helper).
+  // Quieter cadence because each pass touches the filesystem.
+  const BLOB_CLEANUP_MS = 60 * 60 * 1000;
+  setInterval(() => {
+    cleanupOldBlobs(db, config.blobStorageDir)
+      .then((n) => {
+        if (n > 0) log.info({ deleted: n }, 'swept old blobs');
+      })
+      .catch((err) => log.error({ err }, 'blob cleanup failed'));
+  }, BLOB_CLEANUP_MS).unref();
 }
 
 main();
