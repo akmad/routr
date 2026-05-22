@@ -32,19 +32,18 @@ Bigger features are broken into items here before being started.
 
 ## Next
 
-- [ ] **M1.1** `apps/server` bootstrap: Hono app, health check, structured
-  logging, config from env vars.
-- [ ] **M1.2** Drizzle ORM setup with SQLite. Migrations folder. Tables
-  per SPEC §10.
+- [ ] **M1.3** Device registration: `POST /api/v1/devices` accepts identity
+  pubkeys, returns device ID. First request creates the user if no users
+  exist yet; subsequent requests need a pairing invite token.
+- [ ] **M1.4** Pairing invite tokens: `POST /api/v1/invites` (auth'd)
+  → token; `GET /api/v1/invites/:token` to look up before redeeming.
+- [ ] **M1.5** WebSocket inbox endpoint at `/api/v1/ws`. Auth'd via
+  short-lived bearer token. Pushes queued envelopes on connect.
 
 ## Backlog (scoped, not started)
 
 ### Milestone 1 — Server skeleton
 
-- [ ] **M1.1** `apps/server` bootstrap: Hono app, health check, structured
-  logging, config from env vars.
-- [ ] **M1.2** Drizzle ORM setup with SQLite. Migrations folder. Tables
-  per SPEC §10.
 - [ ] **M1.3** Device registration endpoint: `POST /api/v1/devices`.
   Accepts identity pubkeys, returns device ID.
 - [ ] **M1.4** WebAuthn registration + login flow (first device only;
@@ -112,6 +111,13 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
+- **M1.2** Drizzle ORM + SQLite. Schema with 9 tables (users, devices,
+  device_trusts, envelopes, recipients, blobs, peers, auth_credentials,
+  invite_tokens). Generated initial migration. WAL mode, foreign keys
+  enforced. `runMigrations()` runs at server startup.
+- **M1.1** `apps/server` bootstrap: Hono app factory (testable), env-var
+  config via valibot, pino structured logger, `/api/v1/health` endpoint.
+  Smoke-tested live (boots, migrates, responds). 6 server tests.
 - **M0.4** `packages/crypto` — Ed25519 + X25519 key generation,
   sign/verify, ECDH + HKDF + ChaCha20-Poly1305 wrap/unwrap. 21 tests
   including key-binding, ciphertext-tampering, wrong-recipient
