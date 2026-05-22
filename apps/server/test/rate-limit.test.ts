@@ -83,4 +83,29 @@ describe('rate limiting on POST /api/v1/devices', () => {
     });
     expect([201, 403]).toContain(fresh.status); // not 429
   });
+
+  it('takes the leftmost IP from a comma-separated x-forwarded-for', async () => {
+    const app = makeAppWithRateLimits();
+    // Burn IP "A" by sending with proxy chain "A, proxy1, proxy2".
+    for (let i = 0; i < 10; i++) {
+      await app.request('/api/v1/devices', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': '9.9.9.9, 10.0.0.1, 10.0.0.2',
+        },
+        body: JSON.stringify(newDeviceBody()),
+      });
+    }
+    // Same leftmost IP via a different chain should still hit the limit.
+    const blocked = await app.request('/api/v1/devices', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '9.9.9.9, 192.168.1.1',
+      },
+      body: JSON.stringify(newDeviceBody()),
+    });
+    expect(blocked.status).toBe(429);
+  });
 });
