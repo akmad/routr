@@ -56,6 +56,8 @@ Environment variables (all optional):
 | `HOST` | `0.0.0.0` | Bind address |
 | `DATABASE_URL` | `data/routr.db` | SQLite file path (or `:memory:`) |
 | `BLOB_STORAGE_DIR` | `data/blobs` | Where opaque blob files live |
+| `MAX_BLOB_BYTES` | `26214400` (25 MiB) | Per-blob upload cap. Returns `413 too_large` past this. |
+| `MAX_ENVELOPE_BYTES` | `1048576` (1 MiB) | Per-envelope JSON body cap. Returns `413 too_large` past this. |
 | `LOG_LEVEL` | `info` | pino log level |
 
 ### Reverse proxy + HTTPS
