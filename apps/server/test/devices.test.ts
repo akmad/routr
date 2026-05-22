@@ -95,6 +95,80 @@ describe('POST /api/v1/devices', () => {
   });
 });
 
+describe('GET /api/v1/devices/:id', () => {
+  it('requires auth', async () => {
+    const { app } = makeTestApp();
+    const res = await app.request('/api/v1/devices/01HXXXXXXXXXXXXXXXXXXXXXXX');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns own device public metadata (no userId leak)', async () => {
+    const { app } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+    const ts = String(Date.now());
+    const path = `/api/v1/devices/${deviceId}`;
+    const sigInput = buildSignedRequestString('GET', path, ts, new Uint8Array(0));
+    const sigBytes = sign(me.id.sign.secretKey, new TextEncoder().encode(sigInput));
+    const res = await app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.id).toBe(deviceId);
+    expect(body.userId).toBeUndefined();
+    expect(body.name).toBe('me');
+    expect(body.platform).toBe('web');
+  });
+
+  it('returns 404 for a different user’s device', async () => {
+    const { app } = makeTestApp();
+    // User A bootstraps.
+    const a = fakeIdentityRequest('a');
+    const regA = await postJson(app, '/api/v1/devices', a.body);
+    const { deviceId: aId } = (await regA.json()) as { deviceId: string };
+
+    // A creates a signup invite for a new user B.
+    const inviteBody = JSON.stringify({ scope: 'signup', ttl: 3600 });
+    const inviteTs = String(Date.now());
+    const inviteSig = buildSignedRequestString(
+      'POST',
+      '/api/v1/invites',
+      inviteTs,
+      new TextEncoder().encode(inviteBody),
+    );
+    const inviteSigBytes = sign(a.id.sign.secretKey, new TextEncoder().encode(inviteSig));
+    const inv = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${aId}", timestamp="${inviteTs}", signature="${bytesToB64u(inviteSigBytes)}"`,
+      },
+      body: inviteBody,
+    });
+    const { token } = (await inv.json()) as { token: string };
+
+    const b = fakeIdentityRequest('b');
+    const regB = await postJson(app, '/api/v1/devices', { ...b.body, invite: token });
+    const { deviceId: bId } = (await regB.json()) as { deviceId: string };
+
+    // User A tries to GET user B's device — should 404.
+    const ts = String(Date.now());
+    const path = `/api/v1/devices/${bId}`;
+    const sigInput = buildSignedRequestString('GET', path, ts, new Uint8Array(0));
+    const sigBytes = sign(a.id.sign.secretKey, new TextEncoder().encode(sigInput));
+    const res = await app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${aId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('POST /api/v1/invites + signed-request auth', () => {
   it('rejects unauthenticated requests', async () => {
     const { app } = makeTestApp();
