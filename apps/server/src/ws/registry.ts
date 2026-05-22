@@ -58,4 +58,14 @@ export class ConnectionRegistry {
     for (const set of this.byDevice.values()) n += set.size;
     return n;
   }
+
+  /**
+   * Number of distinct devices with at least one active connection.
+   * Differs from size() when a device has multiple tabs/windows open —
+   * useful for the admin dashboard to answer "how many of my devices
+   * are currently reachable", not "how many sockets are open".
+   */
+  uniqueDevices(): number {
+    return this.byDevice.size;
+  }
 }

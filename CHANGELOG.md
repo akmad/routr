@@ -8,6 +8,18 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **`/api/v1/admin/stats` enrichment**: two new fields useful for
+  monitoring health on a self-hosted instance —
+  - `onlineDevices` (count of distinct devices with at least one open
+    WS, vs the existing `onlineConnections` which counts sockets), so
+    a user with three tabs open shows up as one device.
+  - `oldestPendingAt` (ms timestamp of the earliest unacked
+    recipient row, or null when the queue is empty). A growing
+    number flags a recipient device that's offline for a long stretch
+    or whose drain on reconnect is failing — a single value to chart.
+  Backwards compatible: existing fields and `onlineConnections` are
+  unchanged. ConnectionRegistry exposes a new `uniqueDevices()`
+  helper used by the route.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

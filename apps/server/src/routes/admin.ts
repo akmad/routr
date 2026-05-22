@@ -1,4 +1,4 @@
-import { isNull, sql } from 'drizzle-orm';
+import { eq, isNull, min, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { AppEnv } from '../app.js';
 import { requireDeviceAuth } from '../auth.js';
@@ -26,12 +26,30 @@ export function adminRoute(registry: ConnectionRegistry) {
         .where(isNull(recipients.ackedAt))
         .get()?.n ?? 0;
 
+    // Oldest pending envelope (joined via the recipients table). A growing
+    // value here means a recipient device hasn't acked in a long time —
+    // either offline, or the drain on reconnect is failing. Surfacing it
+    // gives a self-hoster a single number to watch.
+    const oldestPending = db
+      .select({ at: min(envelopes.createdAt) })
+      .from(envelopes)
+      .innerJoin(recipients, eq(recipients.envelopeId, envelopes.id))
+      .where(isNull(recipients.ackedAt))
+      .get();
+    const oldestPendingAt = oldestPending?.at?.getTime() ?? null;
+
     return c.json({
       users: usersN,
       devices: devicesN,
       envelopesStored: envelopesN,
       pendingRecipients: pendingN,
+      oldestPendingAt,
       blobs: blobsN,
+      // Number of distinct devices with at least one open WS, plus the
+      // raw connection count (a device with two tabs counts as 1 device
+      // / 2 connections). `onlineConnections` kept as an alias for
+      // backwards compat with any external scrapers.
+      onlineDevices: registry.uniqueDevices(),
       onlineConnections: registry.size(),
     });
   });
