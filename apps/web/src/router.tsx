@@ -664,6 +664,7 @@ function DevicesPage() {
   const [invite, setInvite] = useState<Invite | null>(null);
   const [ttl, setTtl] = useState('3600');
   const [busy, setBusy] = useState(false);
+  const [revokeError, setRevokeError] = useState('');
 
   useEffect(() => {
     void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
@@ -688,12 +689,13 @@ function DevicesPage() {
 
   async function revoke(deviceId: string, deviceName: string) {
     if (!confirm(`Revoke "${deviceName}"? It will lose access immediately.`)) return;
+    setRevokeError('');
     const res = await signedFetch(identity, `/api/v1/devices/${deviceId}`, { method: 'DELETE' });
     if (res.ok) {
       setDevList((prev) => prev.filter((d) => d.id !== deviceId));
     } else {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(`Revoke failed: ${body.error ?? res.status}`);
+      setRevokeError(`Revoke failed: ${body.error ?? res.status}`);
     }
   }
 
@@ -704,6 +706,7 @@ function DevicesPage() {
         Verify each device's fingerprint matches what's shown on that device itself, out-of-band (in
         person, over a phone call, etc).
       </p>
+      {revokeError && <p className="text-sm text-red-600 mb-3">{revokeError}</p>}
       <ul className="space-y-2 mb-8">
         {devList.map((d) => {
           let fp = '—';
