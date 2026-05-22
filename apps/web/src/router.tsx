@@ -298,7 +298,19 @@ function InboxPage() {
   const identity = useIdentity();
   const [items, setItems] = useState<DecryptedItem[]>([]);
   const [connected, setConnected] = useState(false);
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const socketRef = useRef<BeamSocket | null>(null);
+
+  useEffect(() => {
+    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
+      .then((r) => r.json())
+      .then((list) => {
+        const map: Record<string, string> = {};
+        for (const d of list as Array<{ id: string; name: string }>) map[d.id] = d.name;
+        setDeviceNames(map);
+      })
+      .catch(() => {});
+  }, [identity]);
 
   useEffect(() => {
     const sock = new BeamSocket(identity);
@@ -373,7 +385,7 @@ function InboxPage() {
               <p className="text-sm text-gray-600">Unsupported type: {item.kind}</p>
             )}
             <p className="text-xs text-gray-400 mt-1">
-              from {item.fromDevice.slice(0, 8)}… &middot;{' '}
+              from {deviceNames[item.fromDevice] ?? `${item.fromDevice.slice(0, 8)}…`} &middot;{' '}
               {new Date(item.createdAt).toLocaleTimeString()}
             </p>
           </li>
