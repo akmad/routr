@@ -788,6 +788,15 @@ function DevicesPage() {
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 
+type ServerInfo = {
+  service: string;
+  version: number;
+  uptimeSec: number;
+  gitSha?: string;
+  nodeVersion?: string;
+  startedAt?: string;
+};
+
 function SettingsPage() {
   const identity = useIdentity();
   let fp = '—';
@@ -796,6 +805,23 @@ function SettingsPage() {
   } catch {
     // Malformed identity — show placeholder.
   }
+
+  const [server, setServer] = useState<ServerInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${identity.serverUrl}/api/v1/health`)
+      .then((r) => r.json() as Promise<ServerInfo>)
+      .then((info) => {
+        if (!cancelled) setServer(info);
+      })
+      .catch(() => {
+        // Best-effort; the panel just shows "—" placeholders.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [identity.serverUrl]);
 
   async function handleForget() {
     if (!confirm('Remove this device from local storage? You will need to re-register.')) return;
@@ -824,6 +850,37 @@ function SettingsPage() {
           <span className="ml-2 font-mono text-xs">{identity.userId}</span>
         </div>
       </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 text-sm">
+        <h2 className="font-semibold mb-2">Server status</h2>
+        <div className="space-y-1 text-xs">
+          <div>
+            <span className="text-gray-500">Protocol version</span>
+            <span className="ml-2 font-mono">{server?.version ?? '—'}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">Build</span>
+            <span className="ml-2 font-mono">
+              {server?.gitSha ? server.gitSha.slice(0, 12) : '—'}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">Node</span>
+            <span className="ml-2 font-mono">{server?.nodeVersion ?? '—'}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">Uptime</span>
+            <span className="ml-2 font-mono">{server ? formatUptime(server.uptimeSec) : '—'}</span>
+          </div>
+          {server?.startedAt && (
+            <div>
+              <span className="text-gray-500">Started</span>
+              <span className="ml-2 font-mono">{new Date(server.startedAt).toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <button
         type="button"
         onClick={() => void handleForget()}
@@ -837,6 +894,19 @@ function SettingsPage() {
       </p>
     </div>
   );
+}
+
+// Format a duration (in seconds) as a compact "1d 4h 12m" / "37m 12s" / "9s".
+function formatUptime(totalSec: number): string {
+  if (!Number.isFinite(totalSec) || totalSec < 0) return '—';
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 // ─── Sent page ───────────────────────────────────────────────────────────────

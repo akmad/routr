@@ -8,6 +8,11 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Server-status panel on the web Settings page**: polls `/api/v1/health`
+  and renders protocol version, build (truncated git SHA), Node
+  version, formatted uptime ("3d 4h 12m"), and start time. Best-effort
+  — when the server isn't reachable the fields show "—" rather than
+  blocking the page.
 - **`/api/v1/health` enrichment**: adds `gitSha`, `nodeVersion`, and
   `startedAt` (ISO timestamp) on top of the existing fields, so an
   operator can quickly answer "what's running on this instance?"
