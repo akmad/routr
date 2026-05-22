@@ -18,8 +18,8 @@
     "@routr/crypto": "workspace:*",
     "@routr/protocol": "workspace:*",
     "better-sqlite3": "^11.5.0",
-    "drizzle-orm": "^0.36.3",
-    "hono": "^4.6.10",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.22",
     "pino": "^9.5.0",
     "valibot": "^0.42.1"
   },
