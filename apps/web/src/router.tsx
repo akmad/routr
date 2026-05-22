@@ -1,4 +1,11 @@
-import { b64uToBytes, bytesToB64u, decryptPayload, sign, unwrapKey } from '@routr/crypto';
+import {
+  b64uToBytes,
+  bytesToB64u,
+  decryptPayload,
+  fingerprint,
+  sign,
+  unwrapKey,
+} from '@routr/crypto';
 import {
   Link,
   Navigate,
@@ -436,7 +443,13 @@ function SendPage() {
 
 // ─── Devices page ─────────────────────────────────────────────────────────────
 
-type DeviceInfo = { id: string; name: string; platform: string };
+type DeviceInfo = {
+  id: string;
+  name: string;
+  platform: string;
+  kexPub: string;
+  signPub: string;
+};
 type Invite = { token: string };
 
 function DevicesPage() {
@@ -470,23 +483,36 @@ function DevicesPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Devices</h1>
+      <p className="text-xs text-gray-500 mb-3">
+        Verify each device's fingerprint matches what's shown on that device itself, out-of-band (in
+        person, over a phone call, etc).
+      </p>
       <ul className="space-y-2 mb-8">
-        {devList.map((d) => (
-          <li
-            key={d.id}
-            className={`bg-white border rounded-lg px-4 py-3 ${d.id === identity.deviceId ? 'border-indigo-300' : 'border-gray-200'}`}
-          >
-            <p className="text-sm font-medium">
-              {d.name}{' '}
-              {d.id === identity.deviceId && (
-                <span className="text-xs text-indigo-500 ml-1">(this device)</span>
-              )}
-            </p>
-            <p className="text-xs text-gray-400">
-              {d.platform} &middot; {d.id.slice(0, 8)}…
-            </p>
-          </li>
-        ))}
+        {devList.map((d) => {
+          let fp = '—';
+          try {
+            fp = fingerprint(b64uToBytes(d.signPub), b64uToBytes(d.kexPub));
+          } catch {
+            // Malformed key bytes — show placeholder.
+          }
+          return (
+            <li
+              key={d.id}
+              className={`bg-white border rounded-lg px-4 py-3 ${d.id === identity.deviceId ? 'border-indigo-300' : 'border-gray-200'}`}
+            >
+              <p className="text-sm font-medium">
+                {d.name}{' '}
+                {d.id === identity.deviceId && (
+                  <span className="text-xs text-indigo-500 ml-1">(this device)</span>
+                )}
+              </p>
+              <p className="text-xs text-gray-400">
+                {d.platform} &middot; {d.id.slice(0, 8)}…
+              </p>
+              <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
+            </li>
+          );
+        })}
       </ul>
       <div className="border-t pt-4">
         <h2 className="text-sm font-semibold mb-3">Pair a new device</h2>
@@ -528,6 +554,12 @@ function DevicesPage() {
 
 function SettingsPage() {
   const identity = useIdentity();
+  let fp = '—';
+  try {
+    fp = fingerprint(identity.signPublicKey, identity.kexPublicKey);
+  } catch {
+    // Malformed identity — show placeholder.
+  }
 
   async function handleForget() {
     if (!confirm('Remove this device from local storage? You will need to re-register.')) return;
@@ -546,6 +578,10 @@ function SettingsPage() {
         <div>
           <span className="text-gray-500">Device ID</span>
           <span className="ml-2 font-mono text-xs">{identity.deviceId}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Fingerprint</span>
+          <div className="font-mono text-xs mt-0.5 select-all">{fp}</div>
         </div>
         <div>
           <span className="text-gray-500">User ID</span>

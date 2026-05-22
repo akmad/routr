@@ -15,3 +15,4 @@ export {
   unwrapKey,
   generateEphemeral,
 } from './seal.js';
+export { fingerprint } from './fingerprint.js';

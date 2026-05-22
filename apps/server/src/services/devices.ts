@@ -87,6 +87,7 @@ export function listDevicesForUser(db: Db, userId: string) {
       name: devices.name,
       platform: devices.platform,
       kexPub: devices.kexPub,
+      signPub: devices.signPub,
     })
     .from(devices)
     .where(eq(devices.userId, userId))
