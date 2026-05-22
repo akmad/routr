@@ -1,0 +1,18 @@
+services:
+  beam:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - beam-data:/data
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "/data/beam.db"
+      BLOB_STORAGE_DIR: "/data/blobs"
+      LOG_LEVEL: "info"
+    restart: unless-stopped
+
+volumes:
+  beam-data:

@@ -1,0 +1,25 @@
+{
+  "name": "routr",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Beam — open-source, self-hostable, end-to-end encrypted device-to-device sharing.",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.3"
+  }
+}

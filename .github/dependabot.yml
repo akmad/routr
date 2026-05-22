@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # pnpm workspace: dependabot reads the root + all workspace package.jsons.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Roll up minor/patch updates across all workspaces — one PR/week.
+      dev-deps:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      runtime-deps:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Major updates are landed manually so a maintainer can read the
+      # release notes (crypto, hono, drizzle have semver-major API churn).
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
