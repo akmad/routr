@@ -23,8 +23,9 @@ COPY packages/protocol/ packages/protocol/
 COPY apps/server/ apps/server/
 
 EXPOSE 3000
-ENV BEAM_PORT=3000
-ENV BEAM_DB_PATH=/data/beam.db
+ENV PORT=3000
+ENV DATABASE_URL=/data/beam.db
+ENV BLOB_STORAGE_DIR=/data/blobs
 
 VOLUME ["/data"]
 
