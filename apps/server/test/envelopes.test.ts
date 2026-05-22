@@ -514,4 +514,23 @@ describe('POST /api/v1/envelopes + POST /api/v1/envelopes/:id/ack', () => {
     expect(ackRes.status).toBe(200);
     expect(await ackRes.json()).toEqual({ ok: true, deleted: true });
   });
+
+  it('returns 413 too_large when body exceeds the configured maxEnvelopeBytes', async () => {
+    const db = makeDb();
+    const log = createLogger({ logLevel: 'fatal' });
+    const { app } = createApp({ db, log, disableRateLimits: true, maxEnvelopeBytes: 256 });
+
+    // Body large enough to trip the limit; content doesn't need to be a
+    // valid envelope because the size check fires before JSON parsing.
+    const oversized = JSON.stringify({ pad: 'x'.repeat(512) });
+    expect(oversized.length).toBeGreaterThan(256);
+
+    const res = await app.request('/api/v1/envelopes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: oversized,
+    });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: 'too_large', max: 256 });
+  });
 });
