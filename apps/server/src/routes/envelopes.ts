@@ -21,8 +21,16 @@ export function envelopesRoute(registry: ConnectionRegistry) {
     if (!result.ok) {
       const status =
         result.reason === 'unknown_sender' ? 404 : result.reason === 'duplicate' ? 409 : 400;
+      c.get('log').warn(
+        { from: env.from, reason: result.reason, kind: env.kind },
+        'envelope rejected',
+      );
       return c.json({ error: result.reason }, status);
     }
+    c.get('log').info(
+      { id: result.id, from: env.from, to: env.to.length, kind: env.kind, size: env.size },
+      'envelope accepted',
+    );
 
     // Live push to online recipients.
     const delivered: string[] = [];

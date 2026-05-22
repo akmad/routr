@@ -29,8 +29,21 @@ devicesRoute.post('/', async (c) => {
 
   if (!result.ok) {
     const status = result.reason === 'invite_required' ? 403 : 400;
+    c.get('log').warn(
+      { name: parsed.output.name, platform: parsed.output.platform, reason: result.reason },
+      'device registration rejected',
+    );
     return c.json({ error: result.reason }, status);
   }
+  c.get('log').info(
+    {
+      deviceId: result.deviceId,
+      userId: result.userId,
+      name: parsed.output.name,
+      platform: parsed.output.platform,
+    },
+    'device registered',
+  );
   return c.json({ deviceId: result.deviceId, userId: result.userId }, 201);
 });
 
@@ -58,6 +71,7 @@ devicesRoute.delete('/:id', requireDeviceAuth, (c) => {
       result.reason === 'not_found' ? 404 : result.reason === 'self_revoke' ? 400 : 403;
     return c.json({ error: result.reason }, status);
   }
+  c.get('log').info({ revoker: requesterId, target: targetId }, 'device revoked');
   return c.json({ ok: true });
 });
 
