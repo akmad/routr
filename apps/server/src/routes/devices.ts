@@ -2,7 +2,8 @@ import { DeviceRegistrationRequestSchema } from '@routr/protocol';
 import { Hono } from 'hono';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.js';
-import { getDeviceById, registerDevice } from '../services/devices.js';
+import { requireDeviceAuth } from '../auth.js';
+import { getDeviceById, listDevicesForUser, registerDevice } from '../services/devices.js';
 
 export const devicesRoute = new Hono<AppEnv>();
 
@@ -26,6 +27,12 @@ devicesRoute.post('/', async (c) => {
     return c.json({ error: result.reason }, status);
   }
   return c.json({ deviceId: result.deviceId, userId: result.userId }, 201);
+});
+
+devicesRoute.get('/', requireDeviceAuth, (c) => {
+  const userId = c.get('userId');
+  const list = listDevicesForUser(c.get('db'), userId);
+  return c.json(list.map((d) => ({ id: d.id, name: d.name, platform: d.platform, kexPub: d.kexPub })));
 });
 
 devicesRoute.get('/:id', (c) => {

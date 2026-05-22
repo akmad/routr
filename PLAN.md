@@ -18,57 +18,32 @@ Bigger features are broken into items here before being started.
 
 ## Now
 
-- [x] **M0.1** Initial repo scaffolding (this PR)
-  - [x] Write SPEC.md
-  - [x] Write PLAN.md
-  - [x] README.md
-  - [x] LICENSE (AGPL-3.0)
-  - [x] .gitignore, .editorconfig
-  - [x] Root package.json + pnpm-workspace.yaml
-  - [x] tsconfig.base.json
-  - [x] biome.json + turbo.json
-  - [x] Empty `apps/` and `packages/` directories
-  - [x] Push + open draft PR
-
-## Next
-
-- [ ] **M1.5** WebSocket inbox endpoint at `/api/v1/ws`. Connect, send
-  signed challenge-response auth, receive queued + live envelopes.
-- [ ] **M1.6** Send envelope: `POST /api/v1/envelopes` validates the
-  envelope's own Ed25519 signature, stores ciphertext + recipients,
-  pushes to online recipients.
-- [ ] **M1.7** Ack: `POST /api/v1/envelopes/:id/ack`. When all recipients
-  have acked, server deletes the envelope.
-
-## Backlog (scoped, not started)
-
-### Milestone 1 — Server skeleton
-- [ ] **M1.5** Inbox WebSocket: `GET /api/v1/ws?device_id=...`.
-  Authenticated via short-lived token. Delivers queued envelopes on
-  connect.
-- [ ] **M1.6** Send envelope endpoint: `POST /api/v1/envelopes`. Server
-  validates signature shape (not content), stores, pushes to online
-  recipients, queues for offline.
-- [ ] **M1.7** Ack endpoint: `POST /api/v1/envelopes/:id/ack`. Marks
-  recipient as acked. Deletes envelope when all recipients acked.
-- [ ] **M1.8** Blob upload + download: chunked PUT, range GET, integrity
-  hash check.
-- [ ] **M1.9** Dockerfile + docker-compose.yml for self-hosters.
-
-### Milestone 2 — Web app
-
 - [ ] **M2.1** `apps/web` bootstrap: Vite + React + Tailwind + TanStack
   Router. Empty shell with routes for `/setup`, `/inbox`, `/send`,
   `/devices`, `/settings`.
 - [ ] **M2.2** Onboarding: detect no-account state, create user, generate
-  device keys, register with server, store private keys in IndexedDB
-  behind a passphrase (later) / plaintext (MVP).
+  device keys, register with server, store private keys in IndexedDB.
 - [ ] **M2.3** Inbox view: connect WS, list received messages,
   decrypt + render URL cards and file download links.
 - [ ] **M2.4** Send view: enter URL or pick file, choose recipient
   device, encrypt + send.
 - [ ] **M2.5** Devices view: list paired devices, pair a new device
   (show QR), revoke a device.
+
+## Next
+
+- [ ] **M3.1** `apps/extension-chrome` bootstrap: WXT + React, MV3.
+- [ ] **M3.2** First-run pairing flow: QR scanner / paste pairing code.
+- [ ] **M3.3** Toolbar action: "Send this tab" → encrypt URL → POST.
+- [ ] **M3.4** Context menu: "Send link to Beam" on right-click of a link.
+- [ ] **M3.5** Background service worker: WS + notifications.
+
+## Backlog (scoped, not started)
+
+### Milestone 1 — Server skeleton
+- [ ] **M1.8** Blob upload + download: chunked PUT, range GET, integrity
+  hash check.
+- [ ] **M1.9** Dockerfile + docker-compose.yml for self-hosters.
 
 ### Milestone 3 — Chrome extension
 
@@ -106,6 +81,13 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
+- **M1.7** Ack endpoint: `POST /api/v1/envelopes/:id/ack`. Cascade-deletes
+  envelope when all recipients acked. 9 envelope service tests.
+- **M1.6** Send envelope endpoint: `POST /api/v1/envelopes`. Validates
+  Ed25519 signature, wrappedKeys/to match, recipient exists, stores.
+- **M1.5** WebSocket inbox: `GET /api/v1/ws`. Ed25519 challenge-response
+  auth, ConnectionRegistry for online presence, drains inbox on connect,
+  ping/pong keepalive. 8 WS session unit tests.
 - **M1.4** Invite tokens: `POST /api/v1/invites` (requires signed-request
   auth from an existing device). Three scopes — signup, pair_device,
   peer. Single-use, TTL-clamped. Atomic consume-during-redeem.

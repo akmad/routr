@@ -79,3 +79,11 @@ export function registerDevice(db: Db, args: RegisterDeviceArgs): RegisterDevice
 export function getDeviceById(db: Db, id: string) {
   return db.select().from(devices).where(eq(devices.id, id)).get();
 }
+
+export function listDevicesForUser(db: Db, userId: string) {
+  return db
+    .select({ id: devices.id, name: devices.name, platform: devices.platform, kexPub: devices.kexPub })
+    .from(devices)
+    .where(eq(devices.userId, userId))
+    .all();
+}
