@@ -52,6 +52,7 @@ export function rateLimit(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
     const ip = fwd?.split(',')[0]?.trim() || 'unknown';
     if (!take(ip, Date.now())) {
       c.header('retry-after', String(Math.ceil(1 / refillPerSecond)));
+      c.get('log')?.warn?.({ ip, path: c.req.path }, 'rate limit hit');
       return c.json({ error: 'rate_limited' }, 429);
     }
     await next();
