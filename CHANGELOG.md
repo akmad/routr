@@ -8,6 +8,19 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Configurable rate limits via env vars** (`RATE_LIMIT_*`): the
+  per-IP token-bucket settings on `/devices` and `/envelopes` are
+  no longer hardcoded. Self-hosters behind reverse proxies, corporate
+  NATs, or mobile carriers (all of which can coalesce many clients
+  onto one source IP) can now raise the burst and refill values
+  without forking. New env vars: `RATE_LIMIT_DEVICES_CAPACITY`,
+  `RATE_LIMIT_DEVICES_REFILL_PER_SECOND`,
+  `RATE_LIMIT_ENVELOPES_CAPACITY`,
+  `RATE_LIMIT_ENVELOPES_REFILL_PER_SECOND`. Defaults preserve the
+  prior values (10 burst / 0.2 rps; 60 burst / 1 rps), so existing
+  deploys see no behavioral change. Validated at startup —
+  non-numeric or non-positive values fail fast with a clear error.
+  `docker-compose.yml` documents the knobs.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

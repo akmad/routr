@@ -12,6 +12,14 @@ services:
       DATABASE_URL: "/data/beam.db"
       BLOB_STORAGE_DIR: "/data/blobs"
       LOG_LEVEL: "info"
+      # Per-IP rate limits (token bucket). Tune higher behind reverse
+      # proxies / corporate NATs that coalesce many clients onto one IP.
+      # Defaults: 10 burst / 1 token per 5s on /devices,
+      #           60 burst / 1 token per 1s on /envelopes.
+      # RATE_LIMIT_DEVICES_CAPACITY: "10"
+      # RATE_LIMIT_DEVICES_REFILL_PER_SECOND: "0.2"
+      # RATE_LIMIT_ENVELOPES_CAPACITY: "60"
+      # RATE_LIMIT_ENVELOPES_REFILL_PER_SECOND: "1"
     restart: unless-stopped
 
 volumes:

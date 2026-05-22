@@ -19,7 +19,17 @@ function main(): void {
   runMigrations(config.databaseUrl);
   const { db } = openDatabase(config.databaseUrl);
 
-  const { app, registry } = createApp({ db, log, blobStorageDir: config.blobStorageDir });
+  const { app, registry } = createApp({
+    db,
+    log,
+    blobStorageDir: config.blobStorageDir,
+    rateLimits: {
+      devicesCapacity: config.rateLimitDevicesCapacity,
+      devicesRefillPerSecond: config.rateLimitDevicesRefillPerSecond,
+      envelopesCapacity: config.rateLimitEnvelopesCapacity,
+      envelopesRefillPerSecond: config.rateLimitEnvelopesRefillPerSecond,
+    },
+  });
 
   // WebSocket upgrade must be injected before calling serve().
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });

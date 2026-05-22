@@ -22,6 +22,20 @@ export type AppEnv = {
   };
 };
 
+export type RateLimitConfig = {
+  devicesCapacity: number;
+  devicesRefillPerSecond: number;
+  envelopesCapacity: number;
+  envelopesRefillPerSecond: number;
+};
+
+const DEFAULT_RATE_LIMITS: RateLimitConfig = {
+  devicesCapacity: 10,
+  devicesRefillPerSecond: 0.2, // 1 token / 5s
+  envelopesCapacity: 60,
+  envelopesRefillPerSecond: 1,
+};
+
 export type AppDeps = {
   db: Db;
   log: Logger;
@@ -29,6 +43,8 @@ export type AppDeps = {
   blobStorageDir?: string;
   /** When true, skip global rate limits — used by tests that batch-create devices. */
   disableRateLimits?: boolean;
+  /** Per-endpoint rate-limit config. Defaults preserve pre-config behavior. */
+  rateLimits?: Partial<RateLimitConfig>;
 };
 
 /**
@@ -62,13 +78,20 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   // Apply per-IP rate limits to the two unauthenticated POST endpoints that
   // would otherwise be enumeration/spam targets. Tests can opt out.
   if (!deps.disableRateLimits) {
+    const limits: RateLimitConfig = { ...DEFAULT_RATE_LIMITS, ...deps.rateLimits };
     app.use(
       '/api/v1/devices',
-      rateLimit({ capacity: 10, refillPerSecond: 0.2 }), // 10 burst, refill 1 token / 5s
+      rateLimit({
+        capacity: limits.devicesCapacity,
+        refillPerSecond: limits.devicesRefillPerSecond,
+      }),
     );
     app.use(
       '/api/v1/envelopes',
-      rateLimit({ capacity: 60, refillPerSecond: 1 }), // 60 burst, refill 1 / s
+      rateLimit({
+        capacity: limits.envelopesCapacity,
+        refillPerSecond: limits.envelopesRefillPerSecond,
+      }),
     );
   }
 
