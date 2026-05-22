@@ -8,10 +8,12 @@ export {
   PayloadSchema,
   UrlPayloadSchema,
   FilePayloadSchema,
+  NotePayloadSchema,
   ControlPayloadSchema,
   type Payload,
   type UrlPayload,
   type FilePayload,
+  type NotePayload,
   type ControlPayload,
 } from './payload.js';
 export { Base64UrlSchema, UlidSchema } from './primitives.js';
