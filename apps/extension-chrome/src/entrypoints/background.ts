@@ -36,6 +36,32 @@ export default defineBackground(() => {
     if (url) void sendUrl(url);
   });
 
+  // Keyboard shortcut handler — Ctrl+Shift+B (Cmd+Shift+B on macOS) ships
+  // the active tab. Resolution uses the same rule-then-first-other-device
+  // logic as the context menu.
+  browser.commands.onCommand.addListener(async (command) => {
+    if (command !== 'send-current-tab') return;
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url;
+    if (!url) return;
+    try {
+      await sendUrl(url);
+      await browser.notifications.create({
+        type: 'basic',
+        iconUrl: '/icon/128.png',
+        title: 'Beam',
+        message: `Sent ${url.slice(0, 80)}`,
+      });
+    } catch (e) {
+      await browser.notifications.create({
+        type: 'basic',
+        iconUrl: '/icon/128.png',
+        title: 'Beam — send failed',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  });
+
   async function sendImageFromUrl(srcUrl: string) {
     // Fetch the image bytes in the background context (avoids CORS in the
     // content page) and ship them as a file envelope.

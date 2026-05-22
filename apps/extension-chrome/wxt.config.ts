@@ -18,6 +18,15 @@ export default defineConfig({
       page: 'options.html',
       open_in_tab: true,
     },
+    commands: {
+      'send-current-tab': {
+        suggested_key: {
+          default: 'Ctrl+Shift+B',
+          mac: 'Command+Shift+B',
+        },
+        description: 'Send the current tab with Beam',
+      },
+    },
   },
   vite: () => ({
     plugins: [react(), tailwindcss()],
