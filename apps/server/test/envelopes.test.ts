@@ -199,6 +199,70 @@ describe('submitEnvelope', () => {
     if (!result.ok) expect(result.reason).toBe('recipient_not_found');
   });
 
+  it('accepts an envelope addressed to multiple recipients (multi-wrappedKeys)', () => {
+    // Register a third device on a third user so we have two recipients.
+    const recipient2Identity = generateIdentity();
+    const inv2 = createInvite(db, { scope: 'signup', userId: null, ttlMs: 60_000 });
+    const r3 = registerDevice(db, {
+      name: 'recipient2',
+      platform: 'ios',
+      signPub: bytesToB64u(recipient2Identity.sign.publicKey),
+      kexPub: bytesToB64u(recipient2Identity.kex.publicKey),
+      invite: inv2.token,
+    });
+    if (!r3.ok) throw new Error('r3');
+
+    // Build an envelope with two recipients (each wrapped separately).
+    const plaintext = new TextEncoder().encode(
+      JSON.stringify({ kind: 'url', url: 'https://multi.example.com' }),
+    );
+    const { payloadKey, ciphertext } = encryptPayload(plaintext);
+    const ephem = generateEphemeral();
+    const wrapped1 = wrapKey(
+      payloadKey,
+      ephem.secretKey,
+      ephem.publicKey,
+      recipientIdentity.kex.publicKey,
+      recipientDeviceId,
+    );
+    const wrapped2 = wrapKey(
+      payloadKey,
+      ephem.secretKey,
+      ephem.publicKey,
+      recipient2Identity.kex.publicKey,
+      r3.deviceId,
+    );
+    const now = Date.now();
+    const env = {
+      v: PROTOCOL_VERSION,
+      id: '',
+      from: senderDeviceId,
+      to: [recipientDeviceId, r3.deviceId],
+      createdAt: now,
+      expiresAt: now + 86400_000,
+      kind: 'url' as const,
+      size: plaintext.length,
+      ciphertext: bytesToB64u(ciphertext),
+      senderEphemeralPub: bytesToB64u(ephem.publicKey),
+      wrappedKeys: {
+        [recipientDeviceId]: bytesToB64u(wrapped1),
+        [r3.deviceId]: bytesToB64u(wrapped2),
+      },
+      signature: '',
+    };
+    const signedForm = canonicalize(
+      Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'id' && k !== 'signature')),
+    );
+    const sig = sign(senderIdentity.sign.secretKey, new TextEncoder().encode(signedForm));
+    const result = submitEnvelope(db, { ...env, signature: bytesToB64u(sig) });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Each recipient sees the envelope in their own pending list.
+    expect(pendingCountFor(db, recipientDeviceId)).toBe(1);
+    expect(pendingCountFor(db, r3.deviceId)).toBe(1);
+  });
+
   it('rejects a byte-identical replay (UNIQUE signature)', () => {
     const env = makeEnvelope(
       senderIdentity,
