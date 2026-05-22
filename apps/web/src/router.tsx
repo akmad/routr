@@ -28,7 +28,7 @@ import {
   saveRule,
   suggestDevice,
 } from './lib/rules.js';
-import { sendFile, sendUrl } from './lib/sender.js';
+import { sendFile, sendNote, sendUrl } from './lib/sender.js';
 import { BeamSocket, type InboxMessage } from './lib/ws.js';
 import { setupIdentity, useIdentity } from './stores/identity.js';
 
@@ -166,6 +166,7 @@ type DecryptedItem = {
   createdAt: number;
   kind: string;
   url?: string;
+  note?: { text: string; title?: string };
   file?: { name: string; mime: string; size: number; blobId: string; fileKey: string };
   error?: string;
 };
@@ -183,6 +184,8 @@ function decryptEnvelope(
     const payload = JSON.parse(new TextDecoder().decode(plaintext)) as {
       kind: string;
       url?: string;
+      text?: string;
+      title?: string;
       filename?: string;
       mime?: string;
       size?: number;
@@ -206,6 +209,11 @@ function decryptEnvelope(
           fileKey: payload.fileKey,
         },
       };
+    }
+    if (payload.kind === 'note' && typeof payload.text === 'string') {
+      const note: { text: string; title?: string } = { text: payload.text };
+      if (payload.title) note.title = payload.title;
+      return { ...base, note };
     }
     return { ...base, url: payload.url };
   } catch {
@@ -309,6 +317,13 @@ function InboxPage() {
                   ({Math.round(item.file.size / 1024)} KB)
                 </span>
               </button>
+            ) : item.kind === 'note' && item.note ? (
+              <div>
+                {item.note.title && <p className="text-sm font-medium mb-1">{item.note.title}</p>}
+                <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">
+                  {item.note.text}
+                </p>
+              </div>
             ) : (
               <p className="text-sm text-gray-600">Unsupported type: {item.kind}</p>
             )}
@@ -329,9 +344,10 @@ type Device = { id: string; name: string; kexPub: string };
 
 function SendPage() {
   const identity = useIdentity();
-  const [mode, setMode] = useState<'url' | 'file'>('url');
+  const [mode, setMode] = useState<'url' | 'file' | 'note'>('url');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [noteText, setNoteText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [recipientId, setRecipientId] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -377,6 +393,9 @@ function SendPage() {
       if (mode === 'url') {
         await sendUrl(identity, recipients, url);
         setUrl('');
+      } else if (mode === 'note') {
+        await sendNote(identity, recipients, noteText);
+        setNoteText('');
       } else {
         if (!file) throw new Error('No file selected');
         await sendFile(identity, recipients, file);
@@ -408,9 +427,16 @@ function SendPage() {
         >
           File
         </button>
+        <button
+          type="button"
+          onClick={() => setMode('note')}
+          className={`flex-1 px-3 py-1.5 rounded ${mode === 'note' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          Note
+        </button>
       </div>
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
-        {mode === 'url' ? (
+        {mode === 'url' && (
           <div>
             <label htmlFor="send-url" className="block text-sm font-medium mb-1">
               URL
@@ -425,7 +451,8 @@ function SendPage() {
               required
             />
           </div>
-        ) : (
+        )}
+        {mode === 'file' && (
           <div>
             <label htmlFor="send-file" className="block text-sm font-medium mb-1">
               File
@@ -442,6 +469,22 @@ function SendPage() {
                 {file.name} &middot; {Math.round(file.size / 1024)} KB
               </p>
             )}
+          </div>
+        )}
+        {mode === 'note' && (
+          <div>
+            <label htmlFor="send-note" className="block text-sm font-medium mb-1">
+              Note
+            </label>
+            <textarea
+              id="send-note"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-sans"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Anything — text, a recipe, a thought."
+              rows={4}
+              required
+            />
           </div>
         )}
         <div>

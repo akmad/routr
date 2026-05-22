@@ -4,7 +4,7 @@ import type { StoredIdentity } from './keystore.js';
 export type InboxMessage = {
   id: string;
   fromDevice: string;
-  kind: 'url' | 'file' | 'control';
+  kind: 'url' | 'file' | 'note' | 'control';
   ciphertext: string;
   senderEphemeralPub: string;
   wrappedKey: string;

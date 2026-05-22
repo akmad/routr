@@ -30,7 +30,7 @@ export const EnvelopeSchema = v.object({
   expiresAt: v.pipe(v.number(), v.integer()),
 
   /** What kind of payload. Server uses this for routing hints and quota. */
-  kind: v.picklist(['url', 'file', 'control']),
+  kind: v.picklist(['url', 'file', 'note', 'control']),
 
   /** Plaintext size in bytes. Server enforces quotas against this. */
   size: v.pipe(v.number(), v.integer(), v.minValue(0)),

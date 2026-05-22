@@ -31,6 +31,12 @@ export const FilePayloadSchema = v.object({
   fileKey: v.string(),
 });
 
+export const NotePayloadSchema = v.object({
+  kind: v.literal('note'),
+  text: v.string(),
+  title: v.optional(v.string()),
+});
+
 export const ControlPayloadSchema = v.object({
   kind: v.literal('control'),
   op: v.picklist(['rule_sync', 'device_added', 'device_revoked']),
@@ -40,10 +46,12 @@ export const ControlPayloadSchema = v.object({
 export const PayloadSchema = v.variant('kind', [
   UrlPayloadSchema,
   FilePayloadSchema,
+  NotePayloadSchema,
   ControlPayloadSchema,
 ]);
 
 export type UrlPayload = v.InferOutput<typeof UrlPayloadSchema>;
 export type FilePayload = v.InferOutput<typeof FilePayloadSchema>;
+export type NotePayload = v.InferOutput<typeof NotePayloadSchema>;
 export type ControlPayload = v.InferOutput<typeof ControlPayloadSchema>;
 export type Payload = v.InferOutput<typeof PayloadSchema>;

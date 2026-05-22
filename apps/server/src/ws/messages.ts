@@ -25,7 +25,7 @@ export type InboxEnvelopeMessage = {
   fromDevice: string;
   createdAt: number;
   expiresAt: number;
-  kind: 'url' | 'file' | 'control';
+  kind: 'url' | 'file' | 'note' | 'control';
   size: number;
   ciphertext: string;
   senderEphemeralPub: string;

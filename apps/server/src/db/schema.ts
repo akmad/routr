@@ -80,7 +80,7 @@ export const envelopes = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-    kind: text('kind', { enum: ['url', 'file', 'control'] }).notNull(),
+    kind: text('kind', { enum: ['url', 'file', 'note', 'control'] }).notNull(),
     size: integer('size').notNull(),
     /** base64url, inline ciphertext for url/control. For file, encodes a manifest. */
     ciphertext: text('ciphertext').notNull(),

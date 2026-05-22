@@ -29,7 +29,7 @@ function buildAndSignEnvelope(
   identity: StoredIdentity,
   recipients: Recipient[],
   plaintext: Uint8Array,
-  kind: 'url' | 'file',
+  kind: 'url' | 'file' | 'note',
 ) {
   if (recipients.length === 0) throw new Error('no recipients');
   const { payloadKey, ciphertext } = encryptPayload(plaintext);
@@ -84,6 +84,18 @@ export async function sendUrl(
 ): Promise<void> {
   const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
   await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'url'));
+}
+
+export async function sendNote(
+  identity: StoredIdentity,
+  recipients: Recipient[],
+  text: string,
+  title?: string,
+): Promise<void> {
+  const payload: { kind: 'note'; text: string; title?: string } = { kind: 'note', text };
+  if (title) payload.title = title;
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'note'));
 }
 
 /**
