@@ -8,6 +8,16 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Periodic orphaned-blob sweep**: the server now scans the blob
+  storage directory once an hour and removes ULID-named files whose
+  row has been deleted from the `blobs` table — leftovers from prior
+  unlink failures, partial DB restores, or migrations gone sideways.
+  Files modified within the last hour are skipped so an in-flight
+  upload between `writeFile()` and the row insert can't get pruned.
+  Non-ULID names (`.gitkeep`, `README.md`, etc.) are always left
+  alone. Self-contained `pruneOrphanedBlobs(db, blobDir, minAgeMs)`
+  helper with 5 unit tests covering the orphan path, the tracked-file
+  path, the ULID filter, the mtime guard, and missing-dir tolerance.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

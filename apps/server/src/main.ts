@@ -6,7 +6,7 @@ import { openDatabase } from './db/index.js';
 import { runMigrations } from './db/migrate.js';
 import { createLogger } from './logger.js';
 import { wsRoute } from './routes/ws.js';
-import { cleanupOldBlobs } from './services/blobs.js';
+import { cleanupOldBlobs, pruneOrphanedBlobs } from './services/blobs.js';
 import { cleanupExpiredEnvelopes } from './services/envelopes.js';
 import { cleanupInvites } from './services/invites.js';
 
@@ -52,6 +52,19 @@ function main(): void {
       })
       .catch((err) => log.error({ err }, 'blob cleanup failed'));
   }, BLOB_CLEANUP_MS).unref();
+
+  // Sweep orphaned blob files once an hour — files on disk with no DB
+  // row, leftover from prior unlink failures or DB restores. The helper
+  // skips anything modified in the last hour to avoid racing in-flight
+  // uploads.
+  const BLOB_ORPHAN_MS = 60 * 60 * 1000;
+  setInterval(() => {
+    pruneOrphanedBlobs(db, config.blobStorageDir)
+      .then((n) => {
+        if (n > 0) log.info({ deleted: n }, 'pruned orphaned blob files');
+      })
+      .catch((err) => log.error({ err }, 'orphan blob prune failed'));
+  }, BLOB_ORPHAN_MS).unref();
 
   // Sweep used/expired invites once an hour. Used invites are single-shot;
   // expired-but-unused ones are dead.

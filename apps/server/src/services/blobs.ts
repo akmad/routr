@@ -1,11 +1,16 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { eq, lt } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { blobs } from '../db/schema.js';
 import { newId } from '../ids.js';
+
+// ULID format: 26 chars, Crockford base32. Used to filter out non-blob
+// files (dotfiles, lockfiles, accidental drops) before considering a file
+// as an orphan candidate.
+const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 export type BlobMeta = {
   id: string;
@@ -98,6 +103,56 @@ export async function blobFileSize(blobDir: string, id: string): Promise<number 
   } catch {
     return null;
   }
+}
+
+/**
+ * Sweep files in `blobDir` that have no corresponding row in the `blobs`
+ * table. Orphans accumulate when a previous `unlink` failed silently, a
+ * DB restore reverts past blob inserts, or a botched migration leaves
+ * stragglers. Files newer than `minAgeMs` are skipped to avoid racing a
+ * concurrent storeBlob() that's between writeFile() and the row insert.
+ *
+ * Defaults: 1-hour minimum age. Returns the number of files removed.
+ * Non-ULID-named files (dotfiles, README.md, etc) are always left alone.
+ */
+export async function pruneOrphanedBlobs(
+  db: Db,
+  blobDir: string,
+  minAgeMs: number = 60 * 60 * 1000,
+): Promise<number> {
+  if (!existsSync(blobDir)) return 0;
+  const known = new Set(
+    db
+      .select({ id: blobs.id })
+      .from(blobs)
+      .all()
+      .map((r) => r.id),
+  );
+  let entries: string[];
+  try {
+    entries = await readdir(blobDir);
+  } catch {
+    return 0;
+  }
+  const cutoff = Date.now() - minAgeMs;
+  let removed = 0;
+  for (const name of entries) {
+    if (!ULID_RE.test(name)) continue;
+    if (known.has(name)) continue;
+    const path = join(blobDir, name);
+    try {
+      const s = await stat(path);
+      // Only consider regular files; skip directories and special types.
+      if (!s.isFile()) continue;
+      if (s.mtimeMs > cutoff) continue;
+      await unlink(path);
+      removed++;
+    } catch {
+      // File vanished between readdir and stat/unlink, or stat failed —
+      // either way nothing to do.
+    }
+  }
+  return removed;
 }
 
 /**

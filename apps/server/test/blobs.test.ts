@@ -235,3 +235,93 @@ describe('cleanupOldBlobs', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('pruneOrphanedBlobs', () => {
+  let db: Db;
+  let blobDir: string;
+
+  beforeEach(() => {
+    const t = makeTestApp();
+    db = t.db;
+    blobDir = t.blobDir;
+  });
+
+  afterEach(() => {
+    rmSync(blobDir, { recursive: true, force: true });
+  });
+
+  async function olderThanCutoff(path: string): Promise<void> {
+    // Backdate the file's mtime so the minAgeMs guard treats it as eligible.
+    const { utimes } = await import('node:fs/promises');
+    const t = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await utimes(path, t, t);
+  }
+
+  it('returns 0 when the blob dir is empty', async () => {
+    const { pruneOrphanedBlobs } = await import('../src/services/blobs.js');
+    expect(await pruneOrphanedBlobs(db, blobDir)).toBe(0);
+  });
+
+  it('returns 0 when the blob dir does not exist', async () => {
+    const { pruneOrphanedBlobs } = await import('../src/services/blobs.js');
+    rmSync(blobDir, { recursive: true, force: true });
+    expect(await pruneOrphanedBlobs(db, blobDir)).toBe(0);
+  });
+
+  it('deletes ULID-named files that have no row in blobs', async () => {
+    const { pruneOrphanedBlobs } = await import('../src/services/blobs.js');
+    const { writeFile } = await import('node:fs/promises');
+    const orphanId = '01HAAAAAAAAAAAAAAAAAAAAAAA';
+    const orphanPath = join(blobDir, orphanId);
+    await writeFile(orphanPath, new Uint8Array([7, 7, 7]));
+    await olderThanCutoff(orphanPath);
+
+    const n = await pruneOrphanedBlobs(db, blobDir);
+    expect(n).toBe(1);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(orphanPath)).toBe(false);
+  });
+
+  it('leaves files alone that are still tracked in the blobs table', async () => {
+    const { pruneOrphanedBlobs, storeBlob } = await import('../src/services/blobs.js');
+    const bytes = new Uint8Array([1, 2, 3]);
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    const r = await storeBlob(db, blobDir, bytes, sha);
+    if (!r.ok) throw new Error('store failed');
+    // Backdate so the mtime guard isn't the reason it survives.
+    await olderThanCutoff(join(blobDir, r.meta.id));
+
+    expect(await pruneOrphanedBlobs(db, blobDir)).toBe(0);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(join(blobDir, r.meta.id))).toBe(true);
+  });
+
+  it('ignores non-ULID-named files (dotfiles, README, etc.)', async () => {
+    const { pruneOrphanedBlobs } = await import('../src/services/blobs.js');
+    const { writeFile } = await import('node:fs/promises');
+    const keep = ['.gitkeep', 'README.md', 'not-a-ulid.txt'];
+    for (const name of keep) {
+      const p = join(blobDir, name);
+      await writeFile(p, '');
+      await olderThanCutoff(p);
+    }
+
+    expect(await pruneOrphanedBlobs(db, blobDir)).toBe(0);
+    const { existsSync } = await import('node:fs');
+    for (const name of keep) {
+      expect(existsSync(join(blobDir, name))).toBe(true);
+    }
+  });
+
+  it('skips files modified within minAgeMs (race with in-flight uploads)', async () => {
+    const { pruneOrphanedBlobs } = await import('../src/services/blobs.js');
+    const { writeFile } = await import('node:fs/promises');
+    const freshOrphan = '01HBBBBBBBBBBBBBBBBBBBBBBB';
+    await writeFile(join(blobDir, freshOrphan), new Uint8Array([1]));
+    // No backdating — file is fresh. Default minAgeMs (1h) should skip it.
+
+    expect(await pruneOrphanedBlobs(db, blobDir)).toBe(0);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(join(blobDir, freshOrphan))).toBe(true);
+  });
+});
