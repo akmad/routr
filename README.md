@@ -16,11 +16,18 @@ Project codename / repo / CLI: `routr`. User-facing name: **Beam**.
 ## What works today
 
 - **Server** — Hono + SQLite, E2EE envelope routing, device-to-device WS
-  delivery, signed-request REST auth, invite-based pairing, blob storage.
-- **Web app** — `apps/web`: setup, inbox, send, devices, settings. Keys
-  in IndexedDB; live decryption in the browser.
-- **Chrome extension** — `apps/extension-chrome`: popup "Send this tab",
-  context-menu items, background WS with desktop notifications on incoming.
+  delivery, signed-request REST auth, invite-based pairing, blob storage,
+  device revocation, per-IP rate limiting, replay defense, expired-
+  envelope cleanup, admin stats endpoint.
+- **Web app** — `apps/web`: setup, inbox (URL/file/note rendering), send
+  (URL/file/note + multi-recipient), sent log, devices with fingerprints
+  + revoke buttons, routing rules, settings. Keys in IndexedDB; live
+  decryption in the browser.
+- **Chrome extension** — `apps/extension-chrome`: popup "Send this tab"
+  + file send + recipient picker, Ctrl+Shift+B keyboard shortcut,
+  context-menu items (link / tab / image), options page for routing
+  rules + sent log, background WS with desktop notifications on
+  incoming URLs/files/notes.
 
 ## Self-hosting (Docker)
 
