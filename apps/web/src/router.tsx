@@ -19,6 +19,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { signedFetch } from './lib/api.js';
 import { clearIdentity } from './lib/keystore.js';
+import {
+  type Rule,
+  type RulePattern,
+  deleteRule,
+  listRules,
+  newRuleId,
+  saveRule,
+  suggestDevice,
+} from './lib/rules.js';
 import { sendFile, sendUrl } from './lib/sender.js';
 import { BeamSocket, type InboxMessage } from './lib/ws.js';
 import { setupIdentity, useIdentity } from './stores/identity.js';
@@ -50,6 +59,13 @@ function RootLayout() {
           className="hover:text-indigo-600"
         >
           Devices
+        </Link>
+        <Link
+          to="/rules"
+          activeProps={{ className: 'text-indigo-600' }}
+          className="hover:text-indigo-600"
+        >
+          Rules
         </Link>
         <Link
           to="/settings"
@@ -319,13 +335,36 @@ function SendPage() {
   const [recipientId, setRecipientId] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [suggestedByRule, setSuggestedByRule] = useState(false);
 
   useEffect(() => {
     void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
       .then((r) => r.json())
       .then((data) => setDevices((data as Device[]).filter((d) => d.id !== identity.deviceId)))
       .catch(() => {});
+    void listRules().then(setRules);
   }, [identity]);
+
+  // Auto-suggest recipient based on rules when URL or file changes.
+  useEffect(() => {
+    if (rules.length === 0) return;
+    let candidate: Parameters<typeof suggestDevice>[1] | null = null;
+    if (mode === 'url' && url) candidate = { kind: 'url', url };
+    else if (mode === 'file' && file)
+      candidate = { kind: 'file', name: file.name, mime: file.type || 'application/octet-stream' };
+    if (!candidate) {
+      setSuggestedByRule(false);
+      return;
+    }
+    const target = suggestDevice(rules, candidate);
+    if (target && devices.some((d) => d.id === target)) {
+      setRecipientId(target);
+      setSuggestedByRule(true);
+    } else {
+      setSuggestedByRule(false);
+    }
+  }, [mode, url, file, rules, devices]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -406,7 +445,10 @@ function SendPage() {
         )}
         <div>
           <label htmlFor="send-to" className="block text-sm font-medium mb-1">
-            Send to
+            Send to{' '}
+            {suggestedByRule && (
+              <span className="text-xs text-indigo-600 ml-1">(suggested by rule)</span>
+            )}
           </label>
           {devices.length === 0 ? (
             <p className="text-sm text-gray-400">No other devices found. Pair a device first.</p>
@@ -599,6 +641,190 @@ function SettingsPage() {
   );
 }
 
+// ─── Rules page ──────────────────────────────────────────────────────────────
+
+function RulesPage() {
+  const identity = useIdentity();
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [devList, setDevList] = useState<DeviceInfo[]>([]);
+  const [name, setName] = useState('');
+  const [patternType, setPatternType] = useState<RulePattern['type']>('url_contains');
+  const [patternValue, setPatternValue] = useState('');
+  const [targetDeviceId, setTargetDeviceId] = useState('');
+
+  const refresh = async () => {
+    setRules(await listRules());
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh is stable
+  useEffect(() => {
+    void refresh();
+    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
+      .then((r) => r.json())
+      .then((d) => setDevList(d as DeviceInfo[]))
+      .catch(() => {});
+  }, [identity]);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!targetDeviceId || !patternValue || !name) return;
+    const pattern: RulePattern =
+      patternType === 'kind'
+        ? { type: 'kind', value: patternValue === 'file' ? 'file' : 'url' }
+        : ({ type: patternType, value: patternValue } as RulePattern);
+    const rule: Rule = {
+      id: newRuleId(),
+      name,
+      pattern,
+      targetDeviceId,
+      priority: rules.length,
+    };
+    await saveRule(rule);
+    setName('');
+    setPatternValue('');
+    setTargetDeviceId('');
+    await refresh();
+  }
+
+  async function remove(id: string) {
+    await deleteRule(id);
+    await refresh();
+  }
+
+  function describePattern(p: RulePattern): string {
+    switch (p.type) {
+      case 'url_contains':
+        return `URL contains "${p.value}"`;
+      case 'url_regex':
+        return `URL matches /${p.value}/`;
+      case 'mime_prefix':
+        return `MIME starts with "${p.value}"`;
+      case 'file_ext':
+        return `File ends in .${p.value}`;
+      case 'kind':
+        return `Kind = ${p.value}`;
+    }
+  }
+
+  function deviceName(id: string): string {
+    return devList.find((d) => d.id === id)?.name ?? `${id.slice(0, 8)}…`;
+  }
+
+  return (
+    <div>
+      <h1 className="text-xl font-semibold mb-1">Rules</h1>
+      <p className="text-xs text-gray-500 mb-4">
+        Auto-suggest a recipient based on what you're sending. Rules apply client-side — the server
+        never sees URLs or filenames.
+      </p>
+
+      <ul className="space-y-2 mb-6">
+        {rules.length === 0 && (
+          <li className="text-sm text-gray-400 text-center py-4">No rules yet.</li>
+        )}
+        {rules.map((r) => (
+          <li
+            key={r.id}
+            className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex justify-between items-center"
+          >
+            <div>
+              <p className="text-sm font-medium">{r.name}</p>
+              <p className="text-xs text-gray-500">
+                {describePattern(r.pattern)} → {deviceName(r.targetDeviceId)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void remove(r.id)}
+              className="text-xs text-red-500 hover:underline"
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="border-t pt-4">
+        <h2 className="text-sm font-semibold mb-3">Add a rule</h2>
+        <form onSubmit={(e) => void add(e)} className="space-y-3">
+          <div>
+            <label htmlFor="rule-name" className="block text-xs text-gray-500 mb-1">
+              Name
+            </label>
+            <input
+              id="rule-name"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="YouTube to phone"
+              required
+            />
+          </div>
+          <div className="flex gap-2">
+            <div className="w-1/3">
+              <label htmlFor="rule-pattern-type" className="block text-xs text-gray-500 mb-1">
+                Pattern
+              </label>
+              <select
+                id="rule-pattern-type"
+                className="w-full border border-gray-300 rounded px-2 py-2 text-sm"
+                value={patternType}
+                onChange={(e) => setPatternType(e.target.value as RulePattern['type'])}
+              >
+                <option value="url_contains">URL contains</option>
+                <option value="url_regex">URL regex</option>
+                <option value="mime_prefix">MIME prefix</option>
+                <option value="file_ext">File extension</option>
+                <option value="kind">Kind</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label htmlFor="rule-pattern-value" className="block text-xs text-gray-500 mb-1">
+                Value
+              </label>
+              <input
+                id="rule-pattern-value"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                value={patternValue}
+                onChange={(e) => setPatternValue(e.target.value)}
+                placeholder={patternType === 'kind' ? 'url or file' : 'youtube.com'}
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="rule-target" className="block text-xs text-gray-500 mb-1">
+              Send to
+            </label>
+            <select
+              id="rule-target"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={targetDeviceId}
+              onChange={(e) => setTargetDeviceId(e.target.value)}
+              required
+            >
+              <option value="">Pick a device…</option>
+              {devList
+                .filter((d) => d.id !== identity.deviceId)
+                .map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="bg-indigo-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-indigo-700"
+          >
+            Add rule
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Route tree ───────────────────────────────────────────────────────────────
 
 const rootRoute = createRootRoute({ component: RootLayout });
@@ -633,6 +859,12 @@ const devicesRoute = createRoute({
   component: DevicesPage,
 });
 
+const rulesRouteCfg = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/rules',
+  component: RulesPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -645,6 +877,7 @@ const routeTree = rootRoute.addChildren([
   inboxRoute,
   sendRoute,
   devicesRoute,
+  rulesRouteCfg,
   settingsRoute,
 ]);
 

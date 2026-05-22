@@ -1,4 +1,4 @@
-import { openDB } from 'idb';
+import { openBeamDb } from './db.js';
 
 export type StoredIdentity = {
   deviceId: string;
@@ -10,22 +10,14 @@ export type StoredIdentity = {
   kexPublicKey: Uint8Array;
 };
 
-async function open() {
-  return openDB('beam', 1, {
-    upgrade(db) {
-      db.createObjectStore('identity');
-    },
-  });
-}
-
 export async function loadIdentity(): Promise<StoredIdentity | undefined> {
-  return (await open()).get('identity', 'identity') as Promise<StoredIdentity | undefined>;
+  return (await openBeamDb()).get('identity', 'identity') as Promise<StoredIdentity | undefined>;
 }
 
 export async function saveIdentity(identity: StoredIdentity): Promise<void> {
-  await (await open()).put('identity', identity, 'identity');
+  await (await openBeamDb()).put('identity', identity, 'identity');
 }
 
 export async function clearIdentity(): Promise<void> {
-  await (await open()).delete('identity', 'identity');
+  await (await openBeamDb()).delete('identity', 'identity');
 }
