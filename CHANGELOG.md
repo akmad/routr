@@ -8,6 +8,17 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Per-request log correlation IDs** on the server. Every HTTP request
+  gets a `reqId` (UUID v4; honors an incoming `X-Request-ID` header if
+  well-formed) attached via a pino child logger, so every log line
+  emitted during that request — auth checks, service calls, the
+  request-lifecycle `request begin` / `request end` pair, unhandled
+  errors — share the same id. The id also rides back on the response
+  as `X-Request-ID` for caller-side correlation. `/api/v1/health` skips
+  the lifecycle logs (too noisy on health-checker traffic) but still
+  gets the header. WS sessions get an analogous `connId`. 10 new
+  tests cover honor/reject incoming headers, distinct ids per
+  request, lifecycle pair shape, and quiet-path behavior.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

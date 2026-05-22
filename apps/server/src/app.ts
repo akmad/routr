@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -19,8 +20,12 @@ export type AppEnv = {
     deviceId: string;
     userId: string;
     nonceStore: NonceStore;
+    reqId: string;
   };
 };
+
+/** Paths excluded from request-lifecycle logging (too noisy). */
+const QUIET_PATHS = new Set(['/api/v1/health']);
 
 export type AppDeps = {
   db: Db;
@@ -41,10 +46,31 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
+    // Honor X-Request-ID from upstream (reverse proxy / load balancer) so the
+    // same id can be correlated across systems. Cap at 64 chars and only
+    // accept the conservative alphanumeric / dash / underscore set; otherwise
+    // generate our own UUID.
+    const incoming = c.req.header('x-request-id');
+    const reqId = incoming && /^[A-Za-z0-9_-]{1,64}$/.test(incoming) ? incoming : randomUUID();
+    const log = deps.log.child({ reqId });
     c.set('db', deps.db);
-    c.set('log', deps.log);
+    c.set('log', log);
     c.set('nonceStore', nonceStore);
+    c.set('reqId', reqId);
+    c.header('x-request-id', reqId);
+
+    const quiet = QUIET_PATHS.has(c.req.path);
+    const start = Date.now();
+    if (!quiet) {
+      log.info({ method: c.req.method, path: c.req.path }, 'request begin');
+    }
     await next();
+    if (!quiet) {
+      log.info(
+        { method: c.req.method, path: c.req.path, status: c.res.status, ms: Date.now() - start },
+        'request end',
+      );
+    }
   });
 
   const startedAt = Date.now();
@@ -81,7 +107,10 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
   app.onError((err, c) => {
-    deps.log.error({ err }, 'unhandled error');
+    // Prefer the per-request child logger (includes reqId) over the bare
+    // deps.log so the error line ties back to its request.
+    const log = c.get('log') ?? deps.log;
+    log.error({ err }, 'unhandled error');
     return c.json({ error: 'internal' }, 500);
   });
 

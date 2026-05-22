@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { b64uToBytes, verify } from '@routr/crypto';
 import * as v from 'valibot';
 import type { Db } from '../db/index.js';
@@ -33,15 +33,23 @@ type State =
  * A WS session's state machine. Transport-agnostic: takes a transport that
  * can send text and close the socket. The Hono WS adapter wires this to a
  * real socket; tests wire it to a buffer.
+ *
+ * Each session gets its own child logger keyed on `connId` so log lines
+ * from a single connection can be correlated end-to-end (challenge →
+ * auth → disconnect).
  */
 export class WsSession {
   private state: State;
+  private readonly log: Logger;
+  readonly connId: string;
 
   constructor(
     private readonly deps: SessionDeps,
     private readonly tx: SessionTransport,
   ) {
     this.state = { stage: 'awaiting_auth', nonce: randomBytes(32).toString('base64url') };
+    this.connId = randomUUID();
+    this.log = deps.log.child({ connId: this.connId });
   }
 
   start(): void {
@@ -83,7 +91,7 @@ export class WsSession {
   onClose(): void {
     if (this.state.stage === 'authed') {
       this.deps.registry.remove(this.state.conn);
-      this.deps.log.info({ deviceId: this.state.deviceId }, 'ws device disconnected');
+      this.log.info({ deviceId: this.state.deviceId }, 'ws device disconnected');
     }
   }
 
@@ -123,7 +131,7 @@ export class WsSession {
 
     // Drain the inbox.
     const pending = listPendingFor(this.deps.db, deviceId);
-    this.deps.log.info(
+    this.log.info(
       { deviceId, userId: device.userId, pending: pending.length },
       'ws device authenticated',
     );
