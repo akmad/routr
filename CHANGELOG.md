@@ -8,6 +8,12 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **`pendingCount` on each device in `GET /api/v1/devices`**: number
+  of envelopes addressed to that device that haven't been acked
+  yet — i.e. unread on that device. The UI can use this to show
+  "Phone (3 unread)" without a second request. Service-layer query
+  is one additional GROUP BY per call; clients that ignore the new
+  field see no change.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

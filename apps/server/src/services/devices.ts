@@ -1,6 +1,6 @@
-import { count, eq } from 'drizzle-orm';
+import { count, eq, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
-import { devices, users } from '../db/schema.js';
+import { devices, recipients, users } from '../db/schema.js';
 import { newId } from '../ids.js';
 import { consumeInvite } from './invites.js';
 
@@ -81,7 +81,7 @@ export function getDeviceById(db: Db, id: string) {
 }
 
 export function listDevicesForUser(db: Db, userId: string) {
-  return db
+  const rows = db
     .select({
       id: devices.id,
       name: devices.name,
@@ -93,6 +93,26 @@ export function listDevicesForUser(db: Db, userId: string) {
     .from(devices)
     .where(eq(devices.userId, userId))
     .all();
+
+  // One additional query to count unacked recipients per device. Joining
+  // in the original SELECT would force a LEFT JOIN + GROUP BY, which is
+  // both noisier and less obvious. Two cheap queries beat one clever one
+  // here; the rows are bounded by user device count.
+  const counts = db
+    .select({
+      deviceId: recipients.deviceId,
+      n: sql<number>`count(*)`,
+    })
+    .from(recipients)
+    .where(isNull(recipients.ackedAt))
+    .groupBy(recipients.deviceId)
+    .all();
+  const pendingByDevice = new Map(counts.map((c) => [c.deviceId, c.n]));
+
+  return rows.map((d) => ({
+    ...d,
+    pendingCount: pendingByDevice.get(d.id) ?? 0,
+  }));
 }
 
 /** Bump the last-seen-at timestamp. Cheap update; fire-and-forget from

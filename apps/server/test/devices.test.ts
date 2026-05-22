@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { type AppEnv, createApp } from '../src/app.js';
 import { buildSignedRequestString } from '../src/auth.js';
 import { type Db, openDatabase } from '../src/db/index.js';
+import { envelopes as envelopesTable, recipients as recipientsTable } from '../src/db/schema.js';
+import { newId } from '../src/ids.js';
 import { createLogger } from '../src/logger.js';
 
 const MIGRATIONS = resolve(fileURLToPath(import.meta.url), '../../drizzle');
@@ -425,5 +427,124 @@ describe('DELETE /api/v1/devices/:id (revoke)', () => {
     const res = await signedDelete(app, dev1.id, devId1, devId2);
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toBe('cross_user');
+  });
+});
+
+describe('GET /api/v1/devices — pendingCount', () => {
+  function signedListDevices(
+    app: TestApp,
+    identity: ReturnType<typeof generateIdentity>,
+    deviceId: string,
+  ) {
+    const ts = String(Date.now());
+    const sigInput = buildSignedRequestString('GET', '/api/v1/devices', ts, new Uint8Array(0));
+    const sigBytes = sign(identity.sign.secretKey, new TextEncoder().encode(sigInput));
+    return app.request('/api/v1/devices', {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+  }
+
+  function insertEnvelopeWithRecipient(
+    db: Db,
+    fromDevice: string,
+    toDevice: string,
+    acked: boolean,
+  ) {
+    const id = newId();
+    db.insert(envelopesTable)
+      .values({
+        id,
+        fromDevice,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400_000),
+        kind: 'url',
+        size: 0,
+        ciphertext: '',
+        senderEphemeralPub: '',
+        signature: `sig-${id}`,
+      })
+      .run();
+    db.insert(recipientsTable)
+      .values({
+        envelopeId: id,
+        deviceId: toDevice,
+        wrappedKey: '',
+        ackedAt: acked ? new Date() : null,
+      })
+      .run();
+  }
+
+  it('reports pendingCount=0 when nothing is queued', async () => {
+    const { app } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    const res = await signedListDevices(app, me.id, deviceId);
+    const list = (await res.json()) as Array<{ id: string; pendingCount: number }>;
+    expect(list[0]?.pendingCount).toBe(0);
+  });
+
+  it('counts only unacked recipients toward pendingCount', async () => {
+    const { app, db } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    insertEnvelopeWithRecipient(db, deviceId, deviceId, false);
+    insertEnvelopeWithRecipient(db, deviceId, deviceId, false);
+    insertEnvelopeWithRecipient(db, deviceId, deviceId, true); // acked — excluded
+
+    const res = await signedListDevices(app, me.id, deviceId);
+    const list = (await res.json()) as Array<{ id: string; pendingCount: number }>;
+    expect(list[0]?.pendingCount).toBe(2);
+  });
+
+  it('reports pendingCount per device, not aggregated', async () => {
+    const { app, db } = makeTestApp();
+    const dev1 = fakeIdentityRequest('dev1');
+    const reg1 = await postJson(app, '/api/v1/devices', dev1.body);
+    const { deviceId: id1 } = (await reg1.json()) as { deviceId: string };
+
+    // Pair a second device for the same user via a signed pair_device invite.
+    const inviteBody = JSON.stringify({ scope: 'pair_device', ttl: 3600 });
+    const ts = String(Date.now());
+    const sig = sign(
+      dev1.id.sign.secretKey,
+      new TextEncoder().encode(
+        buildSignedRequestString(
+          'POST',
+          '/api/v1/invites',
+          ts,
+          new TextEncoder().encode(inviteBody),
+        ),
+      ),
+    );
+    const inv = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${id1}", timestamp="${ts}", signature="${bytesToB64u(sig)}"`,
+      },
+      body: inviteBody,
+    });
+    const { token } = (await inv.json()) as { token: string };
+    const dev2 = fakeIdentityRequest('dev2');
+    const reg2 = await postJson(app, '/api/v1/devices', { ...dev2.body, invite: token });
+    const { deviceId: id2 } = (await reg2.json()) as { deviceId: string };
+
+    // dev1 has 1 unacked, dev2 has 3 unacked.
+    insertEnvelopeWithRecipient(db, id2, id1, false);
+    insertEnvelopeWithRecipient(db, id1, id2, false);
+    insertEnvelopeWithRecipient(db, id1, id2, false);
+    insertEnvelopeWithRecipient(db, id1, id2, false);
+
+    const res = await signedListDevices(app, dev1.id, id1);
+    const list = (await res.json()) as Array<{ id: string; pendingCount: number }>;
+    const byId = new Map(list.map((d) => [d.id, d.pendingCount]));
+    expect(byId.get(id1)).toBe(1);
+    expect(byId.get(id2)).toBe(3);
   });
 });
