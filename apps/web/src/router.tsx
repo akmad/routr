@@ -1078,7 +1078,21 @@ function RulesPage() {
 
 // ─── Route tree ───────────────────────────────────────────────────────────────
 
-const rootRoute = createRootRoute({ component: RootLayout });
+function NotFoundPage() {
+  return (
+    <div className="text-center mt-16">
+      <p className="text-sm text-gray-500 mb-2">Nothing here.</p>
+      <Link to="/inbox" className="text-sm text-indigo-600 hover:underline">
+        Back to inbox →
+      </Link>
+    </div>
+  );
+}
+
+const rootRoute = createRootRoute({
+  component: RootLayout,
+  notFoundComponent: NotFoundPage,
+});
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
