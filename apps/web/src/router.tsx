@@ -336,15 +336,43 @@ function InboxPage() {
     return () => sock.disconnect();
   }, [identity]);
 
+  async function clearOne(id: string) {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    await signedFetch(identity, `/api/v1/envelopes/${id}/ack`, { method: 'POST', body: '{}' });
+  }
+
+  async function clearAll() {
+    if (items.length === 0) return;
+    if (!confirm(`Clear ${items.length} message${items.length === 1 ? '' : 's'} from inbox?`))
+      return;
+    const ids = items.map((it) => it.id);
+    setItems([]);
+    // Sequential acks — server's ack endpoint is cheap and idempotent.
+    for (const id of ids) {
+      await signedFetch(identity, `/api/v1/envelopes/${id}/ack`, { method: 'POST', body: '{}' });
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Inbox</h1>
-        <span
-          className={`text-xs px-2 py-1 rounded-full ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-        >
-          {connected ? 'Live' : 'Connecting…'}
-        </span>
+        <div className="flex items-center gap-2">
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void clearAll()}
+              className="text-xs text-gray-500 hover:text-red-500"
+            >
+              Clear all
+            </button>
+          )}
+          <span
+            className={`text-xs px-2 py-1 rounded-full ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+          >
+            {connected ? 'Live' : 'Connecting…'}
+          </span>
+        </div>
       </div>
       {items.length === 0 && (
         <p className="text-gray-400 text-sm text-center mt-16">No messages yet.</p>
@@ -384,10 +412,20 @@ function InboxPage() {
             ) : (
               <p className="text-sm text-gray-600">Unsupported type: {item.kind}</p>
             )}
-            <p className="text-xs text-gray-400 mt-1">
-              from {deviceNames[item.fromDevice] ?? `${item.fromDevice.slice(0, 8)}…`} &middot;{' '}
-              {new Date(item.createdAt).toLocaleTimeString()}
-            </p>
+            <div className="flex justify-between items-end mt-1">
+              <p className="text-xs text-gray-400">
+                from {deviceNames[item.fromDevice] ?? `${item.fromDevice.slice(0, 8)}…`} &middot;{' '}
+                {new Date(item.createdAt).toLocaleTimeString()}
+              </p>
+              <button
+                type="button"
+                onClick={() => void clearOne(item.id)}
+                className="text-xs text-gray-300 hover:text-red-500"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
           </li>
         ))}
       </ul>
