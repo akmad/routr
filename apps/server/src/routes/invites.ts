@@ -25,5 +25,14 @@ invitesRoute.post('/', requireDeviceAuth, async (c) => {
     ttlMs: parsed.output.ttl * 1000,
   });
 
+  c.get('log').info(
+    {
+      issuer: c.get('deviceId'),
+      scope,
+      ttlSec: parsed.output.ttl,
+      expiresAt: invite.expiresAt,
+    },
+    'invite issued',
+  );
   return c.json({ token: invite.token, scope: invite.scope, expiresAt: invite.expiresAt }, 201);
 });

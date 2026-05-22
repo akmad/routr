@@ -43,6 +43,10 @@ export function blobsRoute(blobDir: string) {
       const status = result.reason === 'sha256_mismatch' ? 400 : 500;
       return c.json({ error: result.reason }, status);
     }
+    c.get('log').info(
+      { id: result.meta.id, size: result.meta.size, uploader: c.get('deviceId') },
+      'blob uploaded',
+    );
     return c.json({ id: result.meta.id, size: result.meta.size, sha256: result.meta.sha256 }, 201);
   });
 
