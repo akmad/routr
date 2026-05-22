@@ -8,6 +8,7 @@ import { createLogger } from './logger.js';
 import { wsRoute } from './routes/ws.js';
 import { cleanupOldBlobs } from './services/blobs.js';
 import { cleanupExpiredEnvelopes } from './services/envelopes.js';
+import { cleanupInvites } from './services/invites.js';
 
 function main(): void {
   const config = loadConfig();
@@ -51,6 +52,18 @@ function main(): void {
       })
       .catch((err) => log.error({ err }, 'blob cleanup failed'));
   }, BLOB_CLEANUP_MS).unref();
+
+  // Sweep used/expired invites once an hour. Used invites are single-shot;
+  // expired-but-unused ones are dead.
+  const INVITE_CLEANUP_MS = 60 * 60 * 1000;
+  setInterval(() => {
+    try {
+      const n = cleanupInvites(db);
+      if (n > 0) log.info({ deleted: n }, 'swept old invites');
+    } catch (err) {
+      log.error({ err }, 'invite cleanup failed');
+    }
+  }, INVITE_CLEANUP_MS).unref();
 }
 
 main();

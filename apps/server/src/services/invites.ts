@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/index.js';
 import { inviteTokens } from '../db/schema.js';
 import { newToken } from '../ids.js';
@@ -52,4 +52,17 @@ export function consumeInvite(tx: DbExecutor, token: string): Invite | null {
     scope: row.scope as InviteScope,
     expiresAt: row.expiresAt.getTime(),
   };
+}
+
+/**
+ * Delete used invites + expired-but-unused invites. Used invites can be
+ * removed immediately after redemption (they're single-use); expired
+ * unused ones are dead by definition.
+ */
+export function cleanupInvites(db: Db, now: Date = new Date()): number {
+  const result = db
+    .delete(inviteTokens)
+    .where(or(isNotNull(inviteTokens.usedAt), lt(inviteTokens.expiresAt, now)))
+    .run();
+  return result.changes;
 }

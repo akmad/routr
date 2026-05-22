@@ -228,8 +228,10 @@ describe('cleanupOldBlobs', () => {
     });
     expect(res.status).toBe(201);
 
-    // maxAgeMs = 0 → everything is "old".
-    const n = await cleanupOldBlobs(db, blobDir, 0);
+    // maxAgeMs = -1000 → cutoff is 1s in the future, so any present-or-past
+    // upload counts as 'old'. Using 0 would race against millisecond
+    // precision (uploadedAt could equal cutoff and the < comparison miss).
+    const n = await cleanupOldBlobs(db, blobDir, -1000);
     expect(n).toBe(1);
   });
 });
