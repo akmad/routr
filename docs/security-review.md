@@ -94,17 +94,20 @@ Mitigation later: server tracks `(deviceId, timestamp)` tuples in a
 short-TTL nonce store. Not implemented in v1 because the impact is
 bounded and the operational cost is non-trivial.
 
-### L3: Envelope replay (different concern from L2)
+### L3: Envelope replay (different concern from L2) — FIXED
 
-Envelopes are signed by the sender; the server doesn't enforce that an
-envelope is sent only once. The signed form includes `createdAt` and
-`expiresAt`, so an attacker who captures an envelope can re-POST it
-until `expiresAt`. The recipient sees a duplicate inbox item.
+~~Envelopes are signed by the sender; the server doesn't enforce that an
+envelope is sent only once.~~
 
-Mitigation: envelopes include a fresh `senderEphemeralPub` per
-submission, so a true byte-identical replay is detectable by the
-client (same key wrap, same ciphertext). Server could enforce
-`signature` uniqueness in the DB. Not implemented in v1.
+**Resolved in commit d6b4b03**: `envelopes.signature` has a UNIQUE index
+(migration `0001_previous_otto_octavius.sql`). `submitEnvelope` catches
+the unique-violation and returns `{ ok: false, reason: 'duplicate' }`
+(HTTP 409). Byte-identical replays are now rejected.
+
+Limitation: this defends against verbatim replay. A sender who wants to
+deliver the same payload twice can — they sign a new envelope with a
+new `senderEphemeralPub` and the same plaintext. That's expected; the
+fix is about replay attacks, not deduplication semantics.
 
 ### L4: Metadata exposure to the server
 
@@ -167,8 +170,7 @@ channel.
    (show short fingerprint + QR for out-of-band confirm).
 2. Add a **nonce store** for signed-request replay defense once we have
    redis or a similar TTL store.
-3. Enforce **envelope signature uniqueness** in the DB to prevent
-   server-mediated duplicate delivery.
+3. ~~Enforce **envelope signature uniqueness** in the DB~~ — done.
 4. Add **rate limiting** on `/api/v1/devices` and `/api/v1/invites` to
    prevent enumeration/abuse.
 5. Add a **revocation channel** — a signed message a device can issue
