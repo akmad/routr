@@ -5,6 +5,7 @@ import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { NonceStore } from './nonce-store.js';
+import { adminRoute } from './routes/admin.js';
 import { blobsRoute } from './routes/blobs.js';
 import { devicesRoute } from './routes/devices.js';
 import { envelopesRoute } from './routes/envelopes.js';
@@ -75,6 +76,7 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   app.route('/api/v1/invites', invitesRoute);
   app.route('/api/v1/envelopes', envelopesRoute(registry));
   app.route('/api/v1/blobs', blobsRoute(blobDir));
+  app.route('/api/v1/admin', adminRoute(registry));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
