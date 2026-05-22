@@ -20,9 +20,21 @@ type ServerMsg =
   | { type: 'inbox_envelope'; envelope: InboxMessage }
   | { type: 'pong' };
 
+/**
+ * Beam WS client with exponential backoff reconnect.
+ *
+ * Backoff: 1s, 2s, 4s, 8s, capped at 30s. Resets to 1s on every successful
+ * authentication. `disconnect()` is sticky — once called, no further auto-
+ * reconnect happens (so tearing down a React component cleans up cleanly).
+ */
 export class BeamSocket {
   private ws: WebSocket | null = null;
   private identity: StoredIdentity;
+  private closed = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectDelayMs = 1000;
+  private static readonly MAX_BACKOFF_MS = 30_000;
+
   onEnvelope: ((env: InboxMessage) => void) | null = null;
   onConnected: (() => void) | null = null;
   onDisconnected: (() => void) | null = null;
@@ -32,6 +44,11 @@ export class BeamSocket {
   }
 
   connect() {
+    this.closed = false;
+    this.open();
+  }
+
+  private open() {
     const wsUrl = `${this.identity.serverUrl.replace(/^http/, 'ws')}/api/v1/ws`;
     this.ws = new WebSocket(wsUrl);
     this.ws.onmessage = (e) => {
@@ -39,12 +56,30 @@ export class BeamSocket {
       if (msg.type === 'challenge') {
         this.handleChallenge(msg.nonce);
       } else if (msg.type === 'authenticated') {
+        // Successful round-trip — reset backoff.
+        this.reconnectDelayMs = 1000;
         this.onConnected?.();
       } else if (msg.type === 'inbox_envelope') {
         this.onEnvelope?.(msg.envelope);
       }
     };
-    this.ws.onclose = () => this.onDisconnected?.();
+    this.ws.onclose = () => {
+      this.onDisconnected?.();
+      if (!this.closed) this.scheduleReconnect();
+    };
+    this.ws.onerror = () => {
+      // Browsers fire close after error, so let onclose handle the retry.
+    };
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    const delay = this.reconnectDelayMs;
+    this.reconnectDelayMs = Math.min(delay * 2, BeamSocket.MAX_BACKOFF_MS);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.closed) this.open();
+    }, delay);
   }
 
   private handleChallenge(nonce: string) {
@@ -63,6 +98,11 @@ export class BeamSocket {
   }
 
   disconnect() {
+    this.closed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.ws?.close();
     this.ws = null;
   }
