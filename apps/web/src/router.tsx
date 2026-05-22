@@ -84,8 +84,20 @@ function RootLayout() {
 
 // ─── Setup page ───────────────────────────────────────────────────────────────
 
+function defaultServerUrl(): string {
+  // If the web app is served by the Beam server (the common case for a
+  // self-hosted deployment behind a reverse proxy), the origin is the
+  // server URL. The Vite dev proxy also forwards /api → :3000, so the
+  // origin works in dev too. Fall back to localhost:3000 only if origin
+  // is missing (shouldn't happen in a browser).
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
+  }
+  return 'http://localhost:3000';
+}
+
 function SetupPage() {
-  const [serverUrl, setServerUrl] = useState('http://localhost:3000');
+  const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [deviceName, setDeviceName] = useState('My Browser');
   const [invite, setInvite] = useState('');
   const [error, setError] = useState('');
