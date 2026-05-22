@@ -8,6 +8,17 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **PWA / installable web app**: the Beam web app now ships a
+  `manifest.webmanifest` with `display: standalone`, indigo theme
+  color, and the existing SVG icon (marked maskable). Chrome / Edge
+  show "Install Beam" in the address bar; iOS Safari accepts
+  "Add to Home Screen". Opens without browser chrome, which makes
+  it usable as a real mobile messaging surface — no more "keep a tab
+  open" workaround. Apple-specific meta tags set the app title and
+  status-bar style. Raster (PNG) icons aren't included in this drop:
+  modern Android/desktop browsers accept SVG icons, but iOS
+  home-screen previews look better with a 180×180 PNG, which a
+  self-hoster can add as `/public/apple-touch-icon.png` later.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

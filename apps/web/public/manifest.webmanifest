@@ -1,0 +1,20 @@
+{
+  "name": "Beam",
+  "short_name": "Beam",
+  "description": "End-to-end encrypted message and file sharing between your devices.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#4338ca",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["communication", "productivity", "utilities"]
+}
