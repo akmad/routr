@@ -120,10 +120,17 @@ pnpm --filter @routr/server cli devices remove <device-id> # force-revoke
 pnpm --filter @routr/server cli cleanup         # prune expired/used
 pnpm --filter @routr/server cli invites list    # active tokens only
 pnpm --filter @routr/server cli blobs prune-orphans  # blobs with no envelope
+pnpm --filter @routr/server cli backup /var/backups/beam-$(date +%F)  # online backup
 ```
 
 `--json` is supported on the `list` and `stats` commands. Destructive
 commands prompt for confirmation unless `--force` is passed.
+
+`backup <dir>` writes a consistent SQLite snapshot to `<dir>/routr.db`
+(via SQLite's online backup API — safe to run with the server still
+serving requests) and recursively copies the blob storage dir to
+`<dir>/blobs/`. Restore by stopping the server, copying these files
+back into `DATABASE_URL` / `BLOB_STORAGE_DIR`, and starting it again.
 
 ## Planned (v1.0)
 

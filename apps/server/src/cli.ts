@@ -1,6 +1,7 @@
-import { unlink } from 'node:fs/promises';
+import { cp, mkdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import type Database from 'better-sqlite3';
 import { eq, isNull, sql } from 'drizzle-orm';
 import { type Config, loadConfig } from './config.js';
 import { type Db, openDatabase } from './db/index.js';
@@ -27,6 +28,7 @@ import { cleanupInvites } from './services/invites.js';
  *   invites list [--json]
  *   invites prune
  *   cleanup
+ *   backup  <output-dir>
  */
 
 const USAGE = `beam-admin <command> [args]
@@ -43,6 +45,7 @@ Commands:
   invites list [--json]              list active invite tokens
   invites prune                      delete used/expired invites
   cleanup                            run envelopes/blobs/invites prunes
+  backup <output-dir>                online backup: writes <dir>/routr.db and <dir>/blobs/
 
 Global flags:
   --json                             machine-readable output where supported
@@ -54,6 +57,8 @@ Environment:
 
 export type CliDeps = {
   db: Db;
+  /** Raw better-sqlite3 handle. Required for `backup` (uses the SQLite online-backup API). */
+  rawDb: Database.Database;
   blobDir: string;
   out: NodeJS.WritableStream;
   err: NodeJS.WritableStream;
@@ -349,6 +354,43 @@ export async function cmdCleanup(deps: CliDeps): Promise<number> {
   return 0;
 }
 
+export async function cmdBackup(deps: CliDeps, outputDir: string): Promise<number> {
+  const { rawDb, blobDir, out, err } = deps;
+  await mkdir(outputDir, { recursive: true });
+
+  const dbDest = join(outputDir, 'routr.db');
+  // SQLite online backup: snapshots the DB while it's open, including any
+  // in-flight writes (uses the SQLite Online Backup API under the hood).
+  // Safe to run with the server still serving requests.
+  try {
+    await rawDb.backup(dbDest);
+  } catch (e) {
+    writeln(err, `backup failed (db): ${e instanceof Error ? e.message : String(e)}`);
+    return 1;
+  }
+
+  const blobDest = join(outputDir, 'blobs');
+  // Best-effort blob copy. Blobs are content-addressed (sha256 ids) and
+  // immutable once uploaded; a new blob landing mid-copy just isn't in
+  // the snapshot, which matches the DB snapshot's view (the blobs row
+  // for it wouldn't be there either).
+  try {
+    const exists = await stat(blobDir).catch(() => null);
+    if (exists?.isDirectory()) {
+      await cp(blobDir, blobDest, { recursive: true, force: true });
+    } else {
+      await mkdir(blobDest, { recursive: true });
+    }
+  } catch (e) {
+    writeln(err, `backup failed (blobs): ${e instanceof Error ? e.message : String(e)}`);
+    return 1;
+  }
+
+  writeln(out, `wrote ${dbDest}`);
+  writeln(out, `wrote ${blobDest}/`);
+  return 0;
+}
+
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
 export async function run(argv: string[], deps: CliDeps): Promise<number> {
@@ -449,6 +491,17 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
       }
       case 'cleanup':
         return await cmdCleanup(deps);
+      case 'backup': {
+        // First positional after the command name is the output directory.
+        // Note: tail = ['backup', 'output-dir']? No — `cmd` is consumed already,
+        // so tail starts at 'output-dir'. We just want tail[0].
+        const dest = tail[0];
+        if (!dest) {
+          writeln(deps.err, 'usage: backup <output-dir>');
+          return 64;
+        }
+        return await cmdBackup(deps, dest);
+      }
       default:
         writeln(deps.err, `unknown command: ${cmd}`);
         deps.out.write(USAGE);
@@ -486,9 +539,10 @@ function stdinConfirm(prompt: string): Promise<boolean> {
 async function main(): Promise<void> {
   const config: Config = loadConfig();
   runMigrations(config.databaseUrl);
-  const { db } = openDatabase(config.databaseUrl);
+  const { db, raw } = openDatabase(config.databaseUrl);
   const code = await run(process.argv.slice(2), {
     db,
+    rawDb: raw,
     blobDir: config.blobStorageDir,
     out: process.stdout,
     err: process.stderr,

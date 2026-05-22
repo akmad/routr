@@ -15,7 +15,10 @@ bootstrap.
   `--max-age-days` knob), prune orphan blobs left behind by a user
   deletion, and an aggregate `cleanup` that runs all the prunes.
   Destructive ops confirm by default; `--force` bypasses. `--json`
-  output where it makes sense. 26 unit tests.
+  output where it makes sense. New `backup <dir>` subcommand takes an
+  online snapshot via SQLite's online-backup API (safe with the
+  server running) and recursively copies the blob storage dir. 30
+  unit tests.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
