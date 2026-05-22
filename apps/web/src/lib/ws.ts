@@ -38,6 +38,7 @@ export class BeamSocket {
   onEnvelope: ((env: InboxMessage) => void) | null = null;
   onConnected: (() => void) | null = null;
   onDisconnected: (() => void) | null = null;
+  onRevoked: (() => void) | null = null;
 
   constructor(identity: StoredIdentity) {
     this.identity = identity;
@@ -63,8 +64,15 @@ export class BeamSocket {
         this.onEnvelope?.(msg.envelope);
       }
     };
-    this.ws.onclose = () => {
+    this.ws.onclose = (ev) => {
       this.onDisconnected?.();
+      // 4002 = server saw an unknown device (revoked or forgotten). Stop
+      // reconnecting and let the consumer bounce to setup.
+      if (ev.code === 4002) {
+        this.closed = true;
+        this.onRevoked?.();
+        return;
+      }
       if (!this.closed) this.scheduleReconnect();
     };
     this.ws.onerror = () => {

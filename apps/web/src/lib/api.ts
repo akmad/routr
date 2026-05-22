@@ -1,5 +1,15 @@
 import { bytesToB64u, sign } from '@routr/crypto';
-import type { StoredIdentity } from './keystore.js';
+import { type StoredIdentity, clearIdentity } from './keystore.js';
+
+/**
+ * Called from any layer (signedFetch, BeamSocket) when the server indicates
+ * this device has been revoked / forgotten. Clears local identity and bounces
+ * to /setup. Wired this way so all entry points handle revocation uniformly.
+ */
+export async function handleRevoked(): Promise<void> {
+  await clearIdentity();
+  if (typeof window !== 'undefined') window.location.href = '/setup';
+}
 
 export async function signedFetch(
   identity: StoredIdentity,
@@ -17,7 +27,7 @@ export async function signedFetch(
   const sigInput = `${method}\n${path}\n${timestamp}\n${hashHex}\n`;
   const sigBytes = sign(identity.signSecretKey, new TextEncoder().encode(sigInput));
   const authHeader = `Beam-Sig deviceId="${identity.deviceId}", timestamp="${timestamp}", signature="${bytesToB64u(sigBytes)}"`;
-  return fetch(`${identity.serverUrl}${path}`, {
+  const res = await fetch(`${identity.serverUrl}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
@@ -25,6 +35,22 @@ export async function signedFetch(
       ...(init.headers as Record<string, string> | undefined),
     },
   });
+
+  // Detect server-side revocation: a valid signature against an unknown
+  // device means this identity was forgotten/revoked. Clean up and bounce.
+  if (res.status === 401) {
+    const cloned = res.clone();
+    try {
+      const body = (await cloned.json()) as { error?: string };
+      if (body.error === 'unknown_device') {
+        void handleRevoked();
+      }
+    } catch {
+      // not JSON — ignore
+    }
+  }
+
+  return res;
 }
 
 export async function registerDevice(

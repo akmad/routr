@@ -17,7 +17,7 @@ import {
 } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { signedFetch } from './lib/api.js';
+import { handleRevoked, signedFetch } from './lib/api.js';
 import { clearIdentity } from './lib/keystore.js';
 import {
   type Rule,
@@ -262,6 +262,7 @@ function InboxPage() {
     socketRef.current = sock;
     sock.onConnected = () => setConnected(true);
     sock.onDisconnected = () => setConnected(false);
+    sock.onRevoked = () => void handleRevoked();
     sock.onEnvelope = (env) => {
       setItems((prev) => [decryptEnvelope(env, identity.kexSecretKey, identity.deviceId), ...prev]);
       void signedFetch(identity, `/api/v1/envelopes/${env.id}/ack`, { method: 'POST', body: '{}' });
