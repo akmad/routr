@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
 import { devicesRoute } from './routes/devices.js';
+import { envelopesRoute } from './routes/envelopes.js';
 import { invitesRoute } from './routes/invites.js';
+import { ConnectionRegistry } from './ws/registry.js';
 
 export type AppEnv = {
   Variables: {
@@ -16,13 +18,15 @@ export type AppEnv = {
 export type AppDeps = {
   db: Db;
   log: Logger;
+  registry?: ConnectionRegistry;
 };
 
 /**
  * Build the Hono app. Pure factory — no side effects, no globals. This
  * makes the app testable: tests construct an in-memory DB and pass it in.
  */
-export function createApp(deps: AppDeps): Hono<AppEnv> {
+export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: ConnectionRegistry } {
+  const registry = deps.registry ?? new ConnectionRegistry();
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
@@ -37,6 +41,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
 
   app.route('/api/v1/devices', devicesRoute);
   app.route('/api/v1/invites', invitesRoute);
+  app.route('/api/v1/envelopes', envelopesRoute(registry));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
@@ -45,5 +50,5 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     return c.json({ error: 'internal' }, 500);
   });
 
-  return app;
+  return { app, registry };
 }

@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
-import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { RunResult } from 'better-sqlite3';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core';
 import * as schema from './schema.js';

@@ -1,0 +1,59 @@
+import { EnvelopeSchema } from '@routr/protocol';
+import { Hono } from 'hono';
+import * as v from 'valibot';
+import type { AppEnv } from '../app.js';
+import { requireDeviceAuth } from '../auth.js';
+import { ackEnvelope, submitEnvelope } from '../services/envelopes.js';
+import type { ConnectionRegistry } from '../ws/registry.js';
+
+export function envelopesRoute(registry: ConnectionRegistry) {
+  const route = new Hono<AppEnv>();
+
+  route.post('/', async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = v.safeParse(EnvelopeSchema, raw);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.issues }, 400);
+    }
+    const env = parsed.output;
+
+    const result = submitEnvelope(c.get('db'), env);
+    if (!result.ok) {
+      const status = result.reason === 'unknown_sender' ? 404 : 400;
+      return c.json({ error: result.reason }, status);
+    }
+
+    // Live push to online recipients.
+    const delivered: string[] = [];
+    for (const deviceId of env.to) {
+      const n = registry.push(deviceId, {
+        type: 'envelope',
+        id: result.id,
+        fromDevice: env.from,
+        createdAt: env.createdAt,
+        expiresAt: env.expiresAt,
+        kind: env.kind,
+        size: env.size,
+        ciphertext: env.ciphertext,
+        senderEphemeralPub: env.senderEphemeralPub,
+        wrappedKey: env.wrappedKeys[deviceId] ?? '',
+        signature: env.signature,
+      });
+      if (n > 0) delivered.push(deviceId);
+    }
+
+    return c.json({ id: result.id, deliveredToOnline: delivered }, 201);
+  });
+
+  route.post('/:id/ack', requireDeviceAuth, (c) => {
+    const id = c.req.param('id');
+    const deviceId = c.get('deviceId');
+    const result = ackEnvelope(c.get('db'), id, deviceId);
+    if (!result.ok) {
+      return c.json({ error: result.reason }, 404);
+    }
+    return c.json({ ok: true, deleted: result.deleted });
+  });
+
+  return route;
+}

@@ -2,19 +2,22 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bytesToB64u, generateIdentity, sign } from '@routr/crypto';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import type { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createApp } from '../src/app.js';
+import { type AppEnv, createApp } from '../src/app.js';
 import { buildSignedRequestString } from '../src/auth.js';
 import { type Db, openDatabase } from '../src/db/index.js';
 import { createLogger } from '../src/logger.js';
 
 const MIGRATIONS = resolve(fileURLToPath(import.meta.url), '../../drizzle');
 
-function makeTestApp(): { app: ReturnType<typeof createApp>; db: Db } {
+type TestApp = Hono<AppEnv>;
+
+function makeTestApp(): { app: TestApp; db: Db } {
   const { db } = openDatabase(':memory:');
   migrate(db, { migrationsFolder: MIGRATIONS });
   const log = createLogger({ logLevel: 'fatal' });
-  const app = createApp({ db, log });
+  const { app } = createApp({ db, log });
   return { app, db };
 }
 
@@ -34,7 +37,7 @@ function fakeIdentityRequest(name = 'web') {
 }
 
 async function postJson(
-  app: ReturnType<typeof createApp>,
+  app: TestApp,
   path: string,
   body: unknown,
   headers: Record<string, string> = {},
@@ -47,7 +50,7 @@ async function postJson(
 }
 
 describe('POST /api/v1/devices', () => {
-  let app: ReturnType<typeof createApp>;
+  let app: TestApp;
 
   beforeEach(() => {
     app = makeTestApp().app;

@@ -6,7 +6,8 @@ import { createLogger } from '../src/logger.js';
 function makeTestApp() {
   const { db } = openDatabase(':memory:');
   const log = createLogger({ logLevel: 'fatal' });
-  return createApp({ db, log });
+  const { app } = createApp({ db, log });
+  return app;
 }
 
 describe('health endpoint', () => {
