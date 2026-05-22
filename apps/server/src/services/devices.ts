@@ -82,7 +82,12 @@ export function getDeviceById(db: Db, id: string) {
 
 export function listDevicesForUser(db: Db, userId: string) {
   return db
-    .select({ id: devices.id, name: devices.name, platform: devices.platform, kexPub: devices.kexPub })
+    .select({
+      id: devices.id,
+      name: devices.name,
+      platform: devices.platform,
+      kexPub: devices.kexPub,
+    })
     .from(devices)
     .where(eq(devices.userId, userId))
     .all();

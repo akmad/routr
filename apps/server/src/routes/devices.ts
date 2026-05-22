@@ -32,7 +32,9 @@ devicesRoute.post('/', async (c) => {
 devicesRoute.get('/', requireDeviceAuth, (c) => {
   const userId = c.get('userId');
   const list = listDevicesForUser(c.get('db'), userId);
-  return c.json(list.map((d) => ({ id: d.id, name: d.name, platform: d.platform, kexPub: d.kexPub })));
+  return c.json(
+    list.map((d) => ({ id: d.id, name: d.name, platform: d.platform, kexPub: d.kexPub })),
+  );
 });
 
 devicesRoute.get('/:id', (c) => {
