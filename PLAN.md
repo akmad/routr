@@ -32,22 +32,17 @@ Bigger features are broken into items here before being started.
 
 ## Next
 
-- [ ] **M1.3** Device registration: `POST /api/v1/devices` accepts identity
-  pubkeys, returns device ID. First request creates the user if no users
-  exist yet; subsequent requests need a pairing invite token.
-- [ ] **M1.4** Pairing invite tokens: `POST /api/v1/invites` (auth'd)
-  → token; `GET /api/v1/invites/:token` to look up before redeeming.
-- [ ] **M1.5** WebSocket inbox endpoint at `/api/v1/ws`. Auth'd via
-  short-lived bearer token. Pushes queued envelopes on connect.
+- [ ] **M1.5** WebSocket inbox endpoint at `/api/v1/ws`. Connect, send
+  signed challenge-response auth, receive queued + live envelopes.
+- [ ] **M1.6** Send envelope: `POST /api/v1/envelopes` validates the
+  envelope's own Ed25519 signature, stores ciphertext + recipients,
+  pushes to online recipients.
+- [ ] **M1.7** Ack: `POST /api/v1/envelopes/:id/ack`. When all recipients
+  have acked, server deletes the envelope.
 
 ## Backlog (scoped, not started)
 
 ### Milestone 1 — Server skeleton
-
-- [ ] **M1.3** Device registration endpoint: `POST /api/v1/devices`.
-  Accepts identity pubkeys, returns device ID.
-- [ ] **M1.4** WebAuthn registration + login flow (first device only;
-  subsequent devices use pairing).
 - [ ] **M1.5** Inbox WebSocket: `GET /api/v1/ws?device_id=...`.
   Authenticated via short-lived token. Delivers queued envelopes on
   connect.
@@ -111,6 +106,16 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
+- **M1.4** Invite tokens: `POST /api/v1/invites` (requires signed-request
+  auth from an existing device). Three scopes — signup, pair_device,
+  peer. Single-use, TTL-clamped. Atomic consume-during-redeem.
+- **M1.3** Device registration: `POST /api/v1/devices`. Three modes
+  (first-device bootstrap, signup invite, pair_device invite).
+  Signed-request auth middleware (`Beam-Sig` Authorization header,
+  Ed25519 over canonical method/path/timestamp/body-hash) with 5-min
+  clock-skew tolerance. 8 endpoint tests including full round-trip:
+  device A registers → A issues invite → device B redeems → B is on a
+  new user. Plus tamper-resistance test.
 - **M1.2** Drizzle ORM + SQLite. Schema with 9 tables (users, devices,
   device_trusts, envelopes, recipients, blobs, peers, auth_credentials,
   invite_tokens). Generated initial migration. WAL mode, foreign keys

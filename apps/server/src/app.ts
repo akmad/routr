@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
+import { devicesRoute } from './routes/devices.js';
+import { invitesRoute } from './routes/invites.js';
 
 export type AppEnv = {
   Variables: {
     db: Db;
     log: Logger;
+    deviceId: string;
+    userId: string;
   };
 };
 
@@ -30,6 +34,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.get('/api/v1/health', (c) => {
     return c.json({ ok: true, service: 'routr', version: 1 });
   });
+
+  app.route('/api/v1/devices', devicesRoute);
+  app.route('/api/v1/invites', invitesRoute);
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
