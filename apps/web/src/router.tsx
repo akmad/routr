@@ -294,6 +294,47 @@ async function downloadAndDecryptFile(
   URL.revokeObjectURL(url);
 }
 
+// Tiny "Copy" button that flashes "Copied!" for 1.5s after a successful
+// clipboard write. Falls back to a textarea + execCommand if the
+// async Clipboard API isn't available (older browsers, insecure contexts).
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  async function onClick() {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Permission denied or document not focused — show nothing rather
+      // than crashing.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void onClick()}
+      className="text-xs text-gray-400 hover:text-indigo-600 shrink-0"
+      aria-label={copied ? 'Copied' : label}
+    >
+      {copied ? 'Copied!' : label}
+    </button>
+  );
+}
+
 function InboxPage() {
   const identity = useIdentity();
   const [items, setItems] = useState<DecryptedItem[]>([]);
@@ -399,14 +440,17 @@ function InboxPage() {
             {item.error ? (
               <p className="text-red-500 text-sm">{item.error}</p>
             ) : item.kind === 'url' && item.url ? (
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-600 hover:underline text-sm break-all"
-              >
-                {item.url}
-              </a>
+              <div className="flex items-start gap-3">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 hover:underline text-sm break-all flex-1"
+                >
+                  {item.url}
+                </a>
+                <CopyButton text={item.url} />
+              </div>
             ) : item.kind === 'file' && item.file ? (
               ((file) => (
                 <button
@@ -420,10 +464,17 @@ function InboxPage() {
               ))(item.file)
             ) : item.kind === 'note' && item.note ? (
               <div>
-                {item.note.title && <p className="text-sm font-medium mb-1">{item.note.title}</p>}
-                <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">
-                  {item.note.text}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    {item.note.title && (
+                      <p className="text-sm font-medium mb-1">{item.note.title}</p>
+                    )}
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">
+                      {item.note.text}
+                    </p>
+                  </div>
+                  <CopyButton text={item.note.text} />
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-600">Unsupported type: {item.kind}</p>

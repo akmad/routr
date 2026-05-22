@@ -8,6 +8,12 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Copy-to-clipboard buttons in the web Inbox**: URL and note items
+  now show a small "Copy" button next to their content; clicking it
+  copies the URL or note text and flashes "Copied!" for 1.5s. Uses
+  the async Clipboard API where available, with an execCommand
+  textarea fallback for older or insecure contexts. File items
+  don't get one — they have a download action already.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
