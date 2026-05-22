@@ -8,6 +8,16 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Extension component tests** (React Testing Library): the popup and
+  options pages now have unit-test coverage. New devDeps:
+  `@testing-library/react`, `jest-dom`, `user-event`, `jsdom`. A
+  module-level `vi.stubGlobal('browser', ...)` in
+  `src/test/setup.tsx` injects a typed stub for the `tabs`,
+  `runtime`, `notifications`, `contextMenus`, `commands`, and `action`
+  namespaces so components render in isolation without WXT's runtime.
+  16 new tests: Popup (setup + ready modes, send-tab dispatch,
+  background-error handling, Forget flow); Options (no-identity hint,
+  add/list/delete rule, sent-log rendering + clear).
 - **Firefox extension** (parity with Chrome): the same `apps/extension-chrome`
   package now builds for Firefox MV3 (Firefox 109+). New scripts:
   `build:firefox`, `dev:firefox`, `zip:firefox`, `build:all`. The Chrome-
