@@ -104,7 +104,7 @@ function defaultServerUrl(): string {
   return 'http://localhost:3000';
 }
 
-function SetupPage() {
+export function SetupPage() {
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [deviceName, setDeviceName] = useState('My Browser');
   const [invite, setInvite] = useState('');
@@ -294,7 +294,7 @@ async function downloadAndDecryptFile(
   URL.revokeObjectURL(url);
 }
 
-function InboxPage() {
+export function InboxPage() {
   const identity = useIdentity();
   const [items, setItems] = useState<DecryptedItem[]>([]);
   const [connected, setConnected] = useState(false);
@@ -453,7 +453,7 @@ function InboxPage() {
 
 type Device = { id: string; name: string; kexPub: string };
 
-function SendPage() {
+export function SendPage() {
   const identity = useIdentity();
   const [mode, setMode] = useState<'url' | 'file' | 'note'>('url');
   const [url, setUrl] = useState('');
@@ -658,7 +658,7 @@ function relativeTime(ms: number | null): string {
 }
 type Invite = { token: string; expiresAt: number };
 
-function DevicesPage() {
+export function DevicesPage() {
   const identity = useIdentity();
   const [devList, setDevList] = useState<DeviceInfo[]>([]);
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -788,7 +788,7 @@ function DevicesPage() {
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 
-function SettingsPage() {
+export function SettingsPage() {
   const identity = useIdentity();
   let fp = '—';
   try {
@@ -841,7 +841,7 @@ function SettingsPage() {
 
 // ─── Sent page ───────────────────────────────────────────────────────────────
 
-function SentPage() {
+export function SentPage() {
   const identity = useIdentity();
   const [items, setItems] = useState<SentItem[]>([]);
   const [devList, setDevList] = useState<DeviceInfo[]>([]);
@@ -904,7 +904,7 @@ function SentPage() {
 
 // ─── Rules page ──────────────────────────────────────────────────────────────
 
-function RulesPage() {
+export function RulesPage() {
   const identity = useIdentity();
   const [rules, setRules] = useState<Rule[]>([]);
   const [devList, setDevList] = useState<DeviceInfo[]>([]);
@@ -1088,7 +1088,7 @@ function RulesPage() {
 
 // ─── Route tree ───────────────────────────────────────────────────────────────
 
-function NotFoundPage() {
+export function NotFoundPage() {
   return (
     <div className="text-center mt-16">
       <p className="text-sm text-gray-500 mb-2">Nothing here.</p>
