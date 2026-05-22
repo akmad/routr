@@ -190,4 +190,46 @@ describe('WsSession', () => {
     const pong = JSON.parse(sent[sent.length - 1] as string) as { type: string };
     expect(pong.type).toBe('pong');
   });
+
+  it('pushed envelopes are forwarded with type "envelope" wire shape', () => {
+    const id = generateIdentity();
+    const reg = registerDevice(db, {
+      name: 'test',
+      platform: 'web',
+      signPub: bytesToB64u(id.sign.publicKey),
+      kexPub: bytesToB64u(id.kex.publicKey),
+    });
+    if (!reg.ok) throw new Error('setup failed');
+
+    const { session, sent, registry } = makeSession(db);
+    session.start();
+    const nonce = (JSON.parse(sent[0] as string) as { nonce: string }).nonce;
+    const authBytes = buildWsAuthMessage(reg.deviceId, nonce);
+    session.onMessage(
+      JSON.stringify({
+        type: 'auth',
+        deviceId: reg.deviceId,
+        signature: bytesToB64u(sign(id.sign.secretKey, authBytes)),
+      }),
+    );
+
+    const pushed = registry.push(reg.deviceId, {
+      type: 'envelope',
+      id: 'X'.repeat(26),
+      fromDevice: reg.deviceId,
+      createdAt: 0,
+      expiresAt: 0,
+      kind: 'url',
+      size: 0,
+      ciphertext: '',
+      senderEphemeralPub: '',
+      wrappedKey: '',
+      signature: '',
+    });
+    expect(pushed).toBe(1);
+
+    const lastFrame = JSON.parse(sent[sent.length - 1] as string) as { type: string };
+    // Regression guard: clients only listen for type === 'envelope'.
+    expect(lastFrame.type).toBe('envelope');
+  });
 });
