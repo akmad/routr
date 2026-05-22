@@ -60,13 +60,16 @@ devicesRoute.delete('/:id', requireDeviceAuth, (c) => {
   return c.json({ ok: true });
 });
 
-devicesRoute.get('/:id', (c) => {
+devicesRoute.get('/:id', requireDeviceAuth, (c) => {
+  // Same-user only — return public fields, no userId leak.
   const id = c.req.param('id');
+  const callerUserId = c.get('userId');
   const device = getDeviceById(c.get('db'), id);
-  if (!device) return c.json({ error: 'not_found' }, 404);
+  if (!device || device.userId !== callerUserId) {
+    return c.json({ error: 'not_found' }, 404);
+  }
   return c.json({
     id: device.id,
-    userId: device.userId,
     name: device.name,
     platform: device.platform,
     signPub: device.signPub,
