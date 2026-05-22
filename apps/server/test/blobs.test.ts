@@ -18,12 +18,22 @@ const MIGRATIONS = resolve(fileURLToPath(import.meta.url), '../../drizzle');
 
 type TestApp = Hono<AppEnv>;
 
-function makeTestApp(): { app: TestApp; db: Db; blobDir: string } {
+function makeTestApp(opts: { maxBlobBytes?: number } = {}): {
+  app: TestApp;
+  db: Db;
+  blobDir: string;
+} {
   const { db } = openDatabase(':memory:');
   migrate(db, { migrationsFolder: MIGRATIONS });
   const log = createLogger({ logLevel: 'fatal' });
   const blobDir = mkdtempSync(join(tmpdir(), 'routr-blob-test-'));
-  const { app } = createApp({ db, log, blobStorageDir: blobDir, disableRateLimits: true });
+  const { app } = createApp({
+    db,
+    log,
+    blobStorageDir: blobDir,
+    disableRateLimits: true,
+    maxBlobBytes: opts.maxBlobBytes,
+  });
   return { app, db, blobDir };
 }
 
@@ -193,6 +203,27 @@ describe('POST /api/v1/blobs + GET /api/v1/blobs/:id', () => {
     expect(headRes.status).toBe(200);
     expect(headRes.headers.get('x-beam-sha256')).toBe(sha);
     expect(headRes.headers.get('content-length')).toBe('4');
+  });
+
+  it('returns 413 too_large when body exceeds the configured maxBlobBytes', async () => {
+    // 1 KiB cap so we don't have to materialize 25 MiB just to trip it.
+    const { app, db } = makeTestApp({ maxBlobBytes: 1024 });
+    const { identity, deviceId } = makeDevice(db);
+    const bytes = new Uint8Array(2048); // 2 KiB > 1 KiB cap
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    const res = await app.request('/api/v1/blobs', {
+      method: 'POST',
+      headers: {
+        'x-beam-sha256': sha,
+        'content-type': 'application/octet-stream',
+        ...signedHeaders(identity, deviceId, 'POST', '/api/v1/blobs', bytes),
+      },
+      body: bytes,
+    });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { error: string; max: number };
+    expect(body.error).toBe('too_large');
+    expect(body.max).toBe(1024);
   });
 });
 

@@ -8,6 +8,17 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Configurable per-upload size caps** (`MAX_BLOB_BYTES`,
+  `MAX_ENVELOPE_BYTES`): the previous hardcoded 25 MiB blob limit
+  and a new 1 MiB envelope cap are now env-tunable. Self-hosters
+  on tight disks can drop them; deployments needing larger payloads
+  can raise them. Envelope check rejects on Content-Length first,
+  then on the actual body bytes (a lying Content-Length doesn't
+  evade the limit). Both validated at startup — non-positive or
+  non-integer values fail loudly. Defaults preserve the prior
+  behavior. `docker-compose.yml` documents the knobs.
+
+### Added
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

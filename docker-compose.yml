@@ -12,6 +12,9 @@ services:
       DATABASE_URL: "/data/beam.db"
       BLOB_STORAGE_DIR: "/data/blobs"
       LOG_LEVEL: "info"
+      # Per-upload size caps (bytes). Defaults: 25 MiB blob, 1 MiB envelope.
+      # MAX_BLOB_BYTES: "26214400"
+      # MAX_ENVELOPE_BYTES: "1048576"
     restart: unless-stopped
 
 volumes:

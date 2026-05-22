@@ -19,7 +19,13 @@ function main(): void {
   runMigrations(config.databaseUrl);
   const { db } = openDatabase(config.databaseUrl);
 
-  const { app, registry } = createApp({ db, log, blobStorageDir: config.blobStorageDir });
+  const { app, registry } = createApp({
+    db,
+    log,
+    blobStorageDir: config.blobStorageDir,
+    maxBlobBytes: config.maxBlobBytes,
+    maxEnvelopeBytes: config.maxEnvelopeBytes,
+  });
 
   // WebSocket upgrade must be injected before calling serve().
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });

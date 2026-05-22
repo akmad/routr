@@ -6,11 +6,33 @@ import { requireDeviceAuth } from '../auth.js';
 import { ackEnvelope, ackEnvelopesBulk, submitEnvelope } from '../services/envelopes.js';
 import type { ConnectionRegistry } from '../ws/registry.js';
 
-export function envelopesRoute(registry: ConnectionRegistry) {
+export type EnvelopesRouteOptions = {
+  /** Max envelope POST body size in bytes. Defaults to 1 MiB. */
+  maxEnvelopeBytes?: number;
+};
+
+export function envelopesRoute(registry: ConnectionRegistry, opts: EnvelopesRouteOptions = {}) {
   const route = new Hono<AppEnv>();
+  const maxEnvelopeBytes = opts.maxEnvelopeBytes ?? 1 * 1024 * 1024;
 
   route.post('/', async (c) => {
-    const raw = await c.req.json().catch(() => null);
+    // Reject oversized bodies before parsing JSON. Content-Length is a hint
+    // — when the client lies, JSON.parse will still bound memory at ~maxBytes
+    // because we cap on .text() length, not the post-parse object.
+    const contentLength = Number(c.req.header('content-length') ?? '0');
+    if (contentLength > maxEnvelopeBytes) {
+      return c.json({ error: 'too_large', max: maxEnvelopeBytes }, 413);
+    }
+    const bodyText = await c.req.text().catch(() => '');
+    if (bodyText.length > maxEnvelopeBytes) {
+      return c.json({ error: 'too_large', max: maxEnvelopeBytes }, 413);
+    }
+    let raw: unknown;
+    try {
+      raw = bodyText.length === 0 ? null : JSON.parse(bodyText);
+    } catch {
+      raw = null;
+    }
     const parsed = v.safeParse(EnvelopeSchema, raw);
     if (!parsed.success) {
       return c.json({ error: 'invalid_body', issues: parsed.issues }, 400);

@@ -17,8 +17,14 @@ import { getBlobMeta, readBlob, storeBlob } from '../services/blobs.js';
  * may read which blobs — possession of the unwrap-key + blob ID gates access
  * cryptographically.
  */
-export function blobsRoute(blobDir: string) {
+export type BlobsRouteOptions = {
+  /** Max upload size in bytes. Defaults to 25 MiB. */
+  maxBlobBytes?: number;
+};
+
+export function blobsRoute(blobDir: string, opts: BlobsRouteOptions = {}) {
   const route = new Hono<AppEnv>();
+  const maxBlobBytes = opts.maxBlobBytes ?? 25 * 1024 * 1024;
 
   route.post('/', requireDeviceAuth, async (c) => {
     const claimedSha = c.req.header('x-beam-sha256');
@@ -32,10 +38,9 @@ export function blobsRoute(blobDir: string) {
       return c.json({ error: 'empty_body' }, 400);
     }
     // Bound the size so a single misbehaving client can't DoS the disk.
-    // 25 MB MVP cap; tune via env later if we need bigger.
-    const MAX_BLOB_BYTES = 25 * 1024 * 1024;
-    if (data.length > MAX_BLOB_BYTES) {
-      return c.json({ error: 'too_large', max: MAX_BLOB_BYTES }, 413);
+    // Caller-configurable; default 25 MiB.
+    if (data.length > maxBlobBytes) {
+      return c.json({ error: 'too_large', max: maxBlobBytes }, 413);
     }
 
     const result = await storeBlob(c.get('db'), blobDir, data, claimedSha);

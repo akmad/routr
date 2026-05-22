@@ -29,7 +29,14 @@ export type AppDeps = {
   blobStorageDir?: string;
   /** When true, skip global rate limits — used by tests that batch-create devices. */
   disableRateLimits?: boolean;
+  /** Max single-blob upload size in bytes. Defaults to 25 MiB. */
+  maxBlobBytes?: number;
+  /** Max single-envelope POST body in bytes. Defaults to 1 MiB. */
+  maxEnvelopeBytes?: number;
 };
+
+const DEFAULT_MAX_BLOB_BYTES = 25 * 1024 * 1024;
+const DEFAULT_MAX_ENVELOPE_BYTES = 1 * 1024 * 1024;
 
 /**
  * Build the Hono app. Pure factory — no side effects, no globals. This
@@ -72,10 +79,13 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
     );
   }
 
+  const maxBlobBytes = deps.maxBlobBytes ?? DEFAULT_MAX_BLOB_BYTES;
+  const maxEnvelopeBytes = deps.maxEnvelopeBytes ?? DEFAULT_MAX_ENVELOPE_BYTES;
+
   app.route('/api/v1/devices', devicesRoute);
   app.route('/api/v1/invites', invitesRoute);
-  app.route('/api/v1/envelopes', envelopesRoute(registry));
-  app.route('/api/v1/blobs', blobsRoute(blobDir));
+  app.route('/api/v1/envelopes', envelopesRoute(registry, { maxEnvelopeBytes }));
+  app.route('/api/v1/blobs', blobsRoute(blobDir, { maxBlobBytes }));
   app.route('/api/v1/admin', adminRoute(registry));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
