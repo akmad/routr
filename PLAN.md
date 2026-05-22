@@ -18,25 +18,16 @@ Bigger features are broken into items here before being started.
 
 ## Now
 
-- [ ] **M2.1** `apps/web` bootstrap: Vite + React + Tailwind + TanStack
-  Router. Empty shell with routes for `/setup`, `/inbox`, `/send`,
-  `/devices`, `/settings`.
-- [ ] **M2.2** Onboarding: detect no-account state, create user, generate
-  device keys, register with server, store private keys in IndexedDB.
-- [ ] **M2.3** Inbox view: connect WS, list received messages,
-  decrypt + render URL cards and file download links.
-- [ ] **M2.4** Send view: enter URL or pick file, choose recipient
-  device, encrypt + send.
-- [ ] **M2.5** Devices view: list paired devices, pair a new device
-  (show QR), revoke a device.
+_All MVP milestones (M0–M4) complete. Working through follow-ups
+from the M4.3 security review and the parking lot below._
 
 ## Next
 
-- [ ] **M3.1** `apps/extension-chrome` bootstrap: WXT + React, MV3.
-- [ ] **M3.2** First-run pairing flow: QR scanner / paste pairing code.
-- [ ] **M3.3** Toolbar action: "Send this tab" → encrypt URL → POST.
-- [ ] **M3.4** Context menu: "Send link to Beam" on right-click of a link.
-- [ ] **M3.5** Background service worker: WS + notifications.
+- [ ] Bring the Chrome extension to feature parity with web (rules,
+  fingerprint display, file send).
+- [ ] Server-side envelope signature uniqueness index (L3 from
+  security review).
+- [ ] Server-side nonce store for signed-request replay defense (L2).
 
 ## Backlog (scoped, not started)
 
@@ -86,6 +77,19 @@ _(empty — see Parking lot for next priorities)_
 
 ## Done
 
+- **Routing rules (client-side)**: `/rules` page in web app with 5 pattern
+  types (url_contains, url_regex, mime_prefix, file_ext, kind). IndexedDB
+  storage, send-page auto-suggest. 11 matcher tests in vitest. The product
+  differentiator vs. PushBullet — rules never see the server.
+- **Per-IP rate limiting** on `/api/v1/devices` (10 burst, 1/5s refill)
+  and `/api/v1/envelopes` (60 burst, 1/s refill). 2 rate-limit tests.
+- **Device fingerprint UI**: `fingerprint(signPub, kexPub)` in @routr/crypto
+  (SHA-256 truncated to 16 bytes, formatted as 8 hex groups). Shown on
+  Settings + Devices pages for out-of-band MITM verification. 6 tests.
+- **File send + receive** (web): URL/File toggle on Send page, client
+  encrypts file → uploads as blob → sends envelope with `{blobId, fileKey,
+  …}` payload. Recipient downloads blob, decrypts, triggers browser save.
+  Adds `fileKey` to FilePayloadSchema.
 - **M4.3** Security review pass on crypto code paths. No critical findings;
   6 documented limitations with mitigation paths. See `docs/security-review.md`.
 - **M4.2** Self-host docs in README (Docker, nginx/Caddy reverse proxy, env vars, first-run pairing).

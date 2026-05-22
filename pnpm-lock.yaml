@@ -164,6 +164,9 @@ importers:
       vite:
         specifier: ^6.3.5
         version: 6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
 
   packages/crypto:
     dependencies:
