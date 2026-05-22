@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "start": "node --enable-source-maps --import tsx src/main.ts",
+    "start": "node --import tsx src/main.ts",
+    "build": "echo 'server uses tsx at runtime, no compile step'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",

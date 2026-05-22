@@ -43,7 +43,6 @@ Bigger features are broken into items here before being started.
 ### Milestone 1 — Server skeleton
 - [ ] **M1.8** Blob upload + download: chunked PUT, range GET, integrity
   hash check.
-- [ ] **M1.9** Dockerfile + docker-compose.yml for self-hosters.
 
 ### Milestone 3 — Chrome extension
 
@@ -81,6 +80,17 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
+- **M3.5** Background WS + notifications + context menu. MV3 Chrome extension fully functional.
+- **M3.4** Context menu: "Send link with Beam" + "Send this tab with Beam".
+- **M3.3** Toolbar popup: "Send this tab" button, E2EE encrypt + POST.
+- **M3.2** First-run setup panel in popup.
+- **M3.1** `apps/extension-chrome` bootstrap: WXT + React + Tailwind, MV3.
+- **M2.5** Devices view: list paired devices, invite code generator.
+- **M2.4** Send view: URL form, device selector, E2EE encrypt + POST.
+- **M2.3** Inbox view: WS connect, decrypt + render URL cards.
+- **M2.2** Onboarding: generate keys, register with server, IndexedDB keystore.
+- **M2.1** `apps/web` bootstrap: Vite + React + Tailwind + TanStack Router.
+- **M1.9** Dockerfile + docker-compose.yml for self-hosters.
 - **M1.7** Ack endpoint: `POST /api/v1/envelopes/:id/ack`. Cascade-deletes
   envelope when all recipients acked. 9 envelope service tests.
 - **M1.6** Send envelope endpoint: `POST /api/v1/envelopes`. Validates
