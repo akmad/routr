@@ -20,6 +20,11 @@ import type { FormEvent } from 'react';
 import { handleRevoked, signedFetch } from './lib/api.js';
 import { clearIdentity } from './lib/keystore.js';
 import {
+  getPermission as getNotifPermission,
+  notify as notifyDesktop,
+  requestPermission as requestNotifPermission,
+} from './lib/notifications.js';
+import {
   type Rule,
   type RulePattern,
   deleteRule,
@@ -299,7 +304,20 @@ function InboxPage() {
   const [items, setItems] = useState<DecryptedItem[]>([]);
   const [connected, setConnected] = useState(false);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+  const [notifPermission, setNotifPermission] = useState(() => getNotifPermission());
+  const deviceNamesRef = useRef<Record<string, string>>({});
   const socketRef = useRef<BeamSocket | null>(null);
+
+  // Keep a ref of device-name lookups available inside the onEnvelope closure
+  // without forcing a re-subscribe whenever the names map changes.
+  useEffect(() => {
+    deviceNamesRef.current = deviceNames;
+  }, [deviceNames]);
+
+  async function enableNotifications() {
+    const result = await requestNotifPermission();
+    setNotifPermission(result);
+  }
 
   const refreshDeviceNames = async () => {
     try {
@@ -335,7 +353,32 @@ function InboxPage() {
       // both via live push and via the drain on reconnect; React keys
       // dedupe visually but the underlying state would otherwise hold
       // duplicates and ack twice.
-      setItems((prev) => (prev.some((it) => it.id === item.id) ? prev : [item, ...prev]));
+      let isNew = false;
+      setItems((prev) => {
+        if (prev.some((it) => it.id === item.id)) return prev;
+        isNew = true;
+        return [item, ...prev];
+      });
+      // Fire a desktop notification only for new, successfully-decrypted
+      // items, and only when the tab isn't already visible (otherwise the
+      // visual update is enough). The notify helper is a no-op when
+      // permission isn't granted.
+      if (isNew && !item.error && typeof document !== 'undefined' && document.hidden) {
+        const fromName =
+          deviceNamesRef.current[item.fromDevice] ?? `${item.fromDevice.slice(0, 8)}…`;
+        if (item.kind === 'url' && item.url) {
+          notifyDesktop({ kind: 'url', url: item.url, fromName });
+        } else if (item.kind === 'file' && item.file) {
+          notifyDesktop({ kind: 'file', filename: item.file.name, fromName });
+        } else if (item.kind === 'note' && item.note) {
+          notifyDesktop({
+            kind: 'note',
+            title: item.note.title,
+            text: item.note.text,
+            fromName,
+          });
+        }
+      }
       // Only ack on successful decryption — if the local keystore is somehow
       // out of sync, we don't want to ack-and-lose. Failed envelopes stay
       // in the inbox until expiresAt, giving us another chance after a
@@ -371,6 +414,20 @@ function InboxPage() {
 
   return (
     <div>
+      {notifPermission === 'default' && (
+        <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded px-3 py-2">
+          <p className="text-xs text-indigo-900">
+            Get a desktop alert when a message arrives while this tab is in the background.
+          </p>
+          <button
+            type="button"
+            onClick={() => void enableNotifications()}
+            className="text-xs bg-indigo-600 text-white rounded px-2 py-1 hover:bg-indigo-700"
+          >
+            Enable notifications
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Inbox</h1>
         <div className="flex items-center gap-2">

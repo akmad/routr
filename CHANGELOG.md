@@ -8,6 +8,15 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Desktop notifications in the web app** (parity with the extension):
+  when a new envelope arrives via WS and the tab is in the background
+  (`document.hidden`), the inbox fires a `Notification` summarising
+  the message — link from <sender>, file from <sender>, or note —
+  with the matching URL/filename/text as the body. Permission is
+  requested only via an explicit "Enable notifications" banner on the
+  Inbox; we never auto-prompt. Notifications collapse onto a single
+  `tag: 'beam-inbox'` so a burst of envelopes doesn't pile up. New
+  helper at `apps/web/src/lib/notifications.ts` with 11 unit tests.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
