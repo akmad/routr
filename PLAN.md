@@ -40,8 +40,7 @@ Bigger features are broken into items here before being started.
 
 ## Backlog (scoped, not started)
 
-### Milestone 4 — Polish
-- [ ] **M4.3** Security review pass on crypto code paths.
+_(empty — see Parking lot for next priorities)_
 
 ### Milestone 3 — Chrome extension
 
@@ -77,8 +76,18 @@ Bigger features are broken into items here before being started.
 - Encrypted search over message titles
 - Hosted demo instance
 
+### Security follow-ups from M4.3 review
+- Device key fingerprint UI for out-of-band pairing verification
+- Server-side nonce store to close the 5-min signed-request replay window
+- Unique index on `envelopes.signature` for sender-side replay defense
+- Rate limiting on `/api/v1/devices` and `/api/v1/invites`
+- Device revocation channel (signed "I no longer trust device X" message)
+- Forward secrecy via Double Ratchet or one-time prekeys
+
 ## Done
 
+- **M4.3** Security review pass on crypto code paths. No critical findings;
+  6 documented limitations with mitigation paths. See `docs/security-review.md`.
 - **M4.2** Self-host docs in README (Docker, nginx/Caddy reverse proxy, env vars, first-run pairing).
 - **M4.1** Playwright E2E API test: full register → send → ack round-trip over HTTP.
 - **M1.8** Blob storage: POST/GET/HEAD `/api/v1/blobs`, SHA-256 verification on upload, 25 MB cap, on-disk storage at `BLOB_STORAGE_DIR`. 7 endpoint tests.
