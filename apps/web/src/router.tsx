@@ -457,12 +457,15 @@ function SendPage() {
   const identity = useIdentity();
   const [mode, setMode] = useState<'url' | 'file' | 'note'>('url');
   const [url, setUrl] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [noteText, setNoteText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [recipientId, setRecipientId] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  // While sending a batch of files, surface "1 / 5" progress so a user
+  // who just dropped a folder isn't staring at a frozen "sending" state.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
   const [suggestedByRule, setSuggestedByRule] = useState(false);
 
@@ -475,12 +478,19 @@ function SendPage() {
   }, [identity]);
 
   // Auto-suggest recipient based on rules when URL or file changes.
+  // Multi-file: the first file is the rule input — sending a batch of
+  // mixed-type files via rules is undefined, and "the first one wins"
+  // is the simplest, most predictable answer.
   useEffect(() => {
     if (rules.length === 0) return;
     let candidate: Parameters<typeof suggestDevice>[1] | null = null;
     if (mode === 'url' && url) candidate = { kind: 'url', url };
-    else if (mode === 'file' && file)
-      candidate = { kind: 'file', name: file.name, mime: file.type || 'application/octet-stream' };
+    else if (mode === 'file' && files[0])
+      candidate = {
+        kind: 'file',
+        name: files[0].name,
+        mime: files[0].type || 'application/octet-stream',
+      };
     if (!candidate) {
       setSuggestedByRule(false);
       return;
@@ -492,7 +502,7 @@ function SendPage() {
     } else {
       setSuggestedByRule(false);
     }
-  }, [mode, url, file, rules, devices]);
+  }, [mode, url, files, rules, devices]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -508,13 +518,24 @@ function SendPage() {
         await sendNote(identity, recipients, noteText);
         setNoteText('');
       } else {
-        if (!file) throw new Error('No file selected');
-        await sendFile(identity, recipients, file);
-        setFile(null);
+        if (files.length === 0) throw new Error('No file selected');
+        // Send files sequentially. Parallel would be faster but harder to
+        // surface meaningful per-file progress, and most users dropping
+        // 5–20 files care about clarity more than throughput.
+        setProgress({ done: 0, total: files.length });
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          if (!f) continue;
+          await sendFile(identity, recipients, f);
+          setProgress({ done: i + 1, total: files.length });
+        }
+        setProgress(null);
+        setFiles([]);
       }
       setStatus('sent');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (err) {
+      setProgress(null);
       setErrorMsg(err instanceof Error ? err.message : 'Send failed');
       setStatus('error');
     }
@@ -566,18 +587,28 @@ function SendPage() {
         {mode === 'file' && (
           <div>
             <label htmlFor="send-file" className="block text-sm font-medium mb-1">
-              File
+              {files.length > 1 ? `${files.length} files` : 'File'}
             </label>
             <input
               id="send-file"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm file:mr-3 file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded file:px-3 file:py-1"
               type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              multiple
+              onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : [])}
               required
             />
-            {file && (
-              <p className="text-xs text-gray-500 mt-1">
-                {file.name} &middot; {Math.round(file.size / 1024)} KB
+            {files.length > 0 && (
+              <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+                {files.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="truncate">
+                    {f.name} &middot; {Math.round(f.size / 1024)} KB
+                  </li>
+                ))}
+              </ul>
+            )}
+            {progress && (
+              <p className="text-xs text-indigo-600 mt-2">
+                Sending {progress.done} / {progress.total}…
               </p>
             )}
           </div>

@@ -8,6 +8,13 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Multi-file send in the web app**: the Send → File picker now
+  accepts multiple files. Selecting (or in the future dropping) a
+  batch sends them sequentially with an inline "Sending 3 / 10…"
+  progress label, and the file list is rendered above the button so
+  the user can verify the batch before pressing Send. Per-file send
+  still uses the existing single-file `sendFile()`, so encryption,
+  ack semantics, and recipient fan-out are unchanged.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
