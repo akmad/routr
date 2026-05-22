@@ -32,13 +32,10 @@ Bigger features are broken into items here before being started.
 
 ## Next
 
-- [ ] **M0.2** CI baseline: GitHub Actions workflow that runs `pnpm
-  install`, `pnpm lint`, `pnpm typecheck`, `pnpm test` on every PR.
-- [ ] **M0.3** `packages/protocol` — define envelope types, message kinds,
-  version constants, canonical JSON serialization.
-- [ ] **M0.4** `packages/crypto` — Ed25519 + X25519 key generation,
-  sign/verify, ECDH + HKDF + ChaCha20-Poly1305 wrap/unwrap, with full
-  test vectors. Pure TS, runs in browser and Node.
+- [ ] **M1.1** `apps/server` bootstrap: Hono app, health check, structured
+  logging, config from env vars.
+- [ ] **M1.2** Drizzle ORM setup with SQLite. Migrations folder. Tables
+  per SPEC §10.
 
 ## Backlog (scoped, not started)
 
@@ -115,10 +112,26 @@ Bigger features are broken into items here before being started.
 
 ## Done
 
-(nothing yet)
+- **M0.4** `packages/crypto` — Ed25519 + X25519 key generation,
+  sign/verify, ECDH + HKDF + ChaCha20-Poly1305 wrap/unwrap. 21 tests
+  including key-binding, ciphertext-tampering, wrong-recipient
+  rejection, multi-recipient round-trip. Runs in browser and Node.
+- **M0.3** `packages/protocol` — envelope and payload schemas (valibot),
+  protocol version constant, canonical JSON serialization for signing.
+  13 tests for canonical-form determinism.
+- **M0.2** GitHub Actions CI: `pnpm lint` + `pnpm typecheck` + `pnpm test`
+  on every PR.
+- **M0.1** Repo bootstrapped: SPEC.md, PLAN.md, AGPL-3.0 license,
+  pnpm/Turborepo workspace, Biome lint/format, strict TS base.
 
 ## Decision log
 
+- **2026-05-22 (later)** — Crypto design locked: 32-byte Ed25519 seed for
+  signing, X25519 for ECDH, HKDF-SHA256 with per-recipient device-ID
+  binding, ChaCha20-Poly1305 for both key wrap and payload encryption.
+  Random 12-byte nonce on payload, all-zero nonce on key wrap (safe
+  because wrap key is unique per (ephemeral keypair, recipient)).
+  base64url everywhere on the wire. `@noble/*` libs for primitives.
 - **2026-05-22** — Repo bootstrapped. Decisions captured in SPEC.md:
   E2EE-required server, TS monorepo, Hono+Node server, React web app,
   WXT Chrome extension, AGPL-3.0, Syncthing-style federation. MVP slice
