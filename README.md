@@ -1,5 +1,8 @@
 # Beam
 
+[![CI](https://github.com/akmad/routr/actions/workflows/ci.yml/badge.svg)](https://github.com/akmad/routr/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](./LICENSE)
+
 > **Status:** MVP. Server + web app + Chrome extension work end-to-end on
 > a single host. See [PLAN.md](./PLAN.md) for what's done and what's next.
 
