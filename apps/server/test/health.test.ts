@@ -11,12 +11,21 @@ function makeTestApp() {
 }
 
 describe('health endpoint', () => {
-  it('returns ok', async () => {
+  it('returns ok with uptime', async () => {
     const app = makeTestApp();
     const res = await app.request('/api/v1/health');
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({ ok: true, service: 'routr', version: 1 });
+    const body = (await res.json()) as {
+      ok: boolean;
+      service: string;
+      version: number;
+      uptimeSec: number;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.service).toBe('routr');
+    expect(body.version).toBe(1);
+    expect(typeof body.uptimeSec).toBe('number');
+    expect(body.uptimeSec).toBeGreaterThanOrEqual(0);
   });
 
   it('returns 404 with json error for unknown routes', async () => {

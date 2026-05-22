@@ -46,8 +46,14 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
     await next();
   });
 
+  const startedAt = Date.now();
   app.get('/api/v1/health', (c) => {
-    return c.json({ ok: true, service: 'routr', version: 1 });
+    return c.json({
+      ok: true,
+      service: 'routr',
+      version: 1,
+      uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+    });
   });
 
   const blobDir = deps.blobStorageDir ?? join(tmpdir(), `routr-blobs-${process.pid}`);
