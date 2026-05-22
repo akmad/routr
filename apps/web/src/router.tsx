@@ -465,6 +465,64 @@ function SendPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [rules, setRules] = useState<Rule[]>([]);
   const [suggestedByRule, setSuggestedByRule] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  // Page-level drop: handles drops outside the visible drop zone too,
+  // and crucially prevents the browser's default of navigating to the
+  // file (which would otherwise blow away the app state).
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+        setDragOver(true);
+      }
+    };
+    const onDragLeave = (e: DragEvent) => {
+      // Only clear when the cursor actually leaves the window. `relatedTarget`
+      // is null for inter-window leaves; for nested-element leaves it isn't.
+      if (e.relatedTarget == null) setDragOver(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      setDragOver(false);
+      const f = e.dataTransfer?.files?.[0];
+      if (f) {
+        e.preventDefault();
+        setFile(f);
+        setMode('file');
+      }
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
+
+  // Paste handler: if the clipboard contains a file (e.g. a screenshot
+  // copied with Cmd-Shift-Ctrl-4 → Cmd-V), accept it. Text pastes fall
+  // through to the focused input naturally.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) {
+            e.preventDefault();
+            setFile(f);
+            setMode('file');
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
 
   useEffect(() => {
     void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
@@ -568,13 +626,24 @@ function SendPage() {
             <label htmlFor="send-file" className="block text-sm font-medium mb-1">
               File
             </label>
-            <input
-              id="send-file"
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm file:mr-3 file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded file:px-3 file:py-1"
-              type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              required
-            />
+            <div
+              className={`border-2 border-dashed rounded-md px-4 py-6 text-center transition-colors ${
+                dragOver
+                  ? 'border-indigo-500 bg-indigo-50'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <input
+                id="send-file"
+                className="block w-full text-sm file:mr-3 file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded file:px-3 file:py-1 file:cursor-pointer"
+                type="file"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                required={!file}
+              />
+              <p className="text-xs text-gray-400 mt-2">
+                or drop a file here · paste a screenshot with <kbd className="font-mono">⌘V</kbd>
+              </p>
+            </div>
             {file && (
               <p className="text-xs text-gray-500 mt-1">
                 {file.name} &middot; {Math.round(file.size / 1024)} KB

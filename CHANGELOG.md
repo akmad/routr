@@ -8,6 +8,11 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Drag-and-drop + clipboard paste on the Send page** (web app):
+  drop a file anywhere on the Send page to switch into File mode with
+  the file pre-selected. Paste a screenshot (or any clipboard file)
+  with ⌘V / Ctrl-V to do the same. File mode now shows a proper
+  dashed drop zone with hover/active visual states.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
