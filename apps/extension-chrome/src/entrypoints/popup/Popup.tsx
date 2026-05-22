@@ -216,6 +216,29 @@ function ReadyPanel({
     }
   }
 
+  async function sendFile(file: File) {
+    setSending(true);
+    setResult(null);
+    try {
+      const fileBytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const res = (await browser.runtime.sendMessage({
+        type: 'send_file',
+        fileBytes,
+        filename: file.name,
+        mime: file.type,
+        recipientId,
+      })) as { ok: boolean; error?: string };
+      if (res.ok) {
+        setResult('sent');
+      } else {
+        setErrMsg(res.error ?? 'Failed');
+        setResult('error');
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
   const [showFingerprints, setShowFingerprints] = useState(false);
   let ownFp = '—';
   try {
@@ -257,6 +280,23 @@ function ReadyPanel({
           >
             {sending ? 'Sending…' : 'Send this tab'}
           </button>
+          <label
+            htmlFor="popup-file"
+            className="block mt-2 text-xs text-center text-gray-600 cursor-pointer hover:text-indigo-600"
+          >
+            …or attach a file
+            <input
+              id="popup-file"
+              type="file"
+              className="hidden"
+              disabled={sending || devices.length === 0}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void sendFile(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
           {result === 'sent' && <p className="text-green-600 text-xs mt-1">Sent!</p>}
           {result === 'error' && <p className="text-red-600 text-xs mt-1">{errMsg}</p>}
         </div>

@@ -2,10 +2,12 @@ import { b64uToBytes, bytesToB64u, decryptPayload, sign, unwrapKey } from '@rout
 import { signedFetch } from '../lib/api.js';
 import { loadIdentity } from '../lib/keystore.js';
 import { listRules, suggestDevice } from '../lib/rules.js';
+import { sendFile as senderSendFile, sendUrl as senderSendUrl } from '../lib/sender.js';
 import type { InboxMessage } from '../lib/ws.js';
 
+type ServerDevice = { id: string; name: string; kexPub: string };
+
 export default defineBackground(() => {
-  // Set up context menu item on install.
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
       id: 'beam-send-link',
@@ -22,29 +24,39 @@ export default defineBackground(() => {
   browser.contextMenus.onClicked.addListener((info, tab) => {
     const url =
       info.menuItemId === 'beam-send-link' ? String(info.linkUrl ?? '') : String(tab?.url ?? '');
-    if (url) {
-      void sendUrl(url);
-    }
+    if (url) void sendUrl(url);
   });
 
-  browser.action.onClicked.addListener((tab) => {
+  browser.action.onClicked.addListener(() => {
     void browser.action.openPopup();
-    void tab;
   });
 
-  // Listen for messages from popup.
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
-    const m = msg as { type: string; url?: string; recipientId?: string };
+    const m = msg as {
+      type: string;
+      url?: string;
+      recipientId?: string;
+      fileBytes?: number[];
+      filename?: string;
+      mime?: string;
+    };
     if (m.type === 'send_url' && m.url) {
       sendUrl(m.url, m.recipientId)
         .then(() => sendResponse({ ok: true }))
         .catch((e: unknown) => sendResponse({ ok: false, error: String(e) }));
-      return true; // keep channel open for async response
+      return true;
+    }
+    if (m.type === 'send_file' && m.fileBytes && m.filename) {
+      sendFile(new Uint8Array(m.fileBytes), m.filename, m.mime ?? '', m.recipientId)
+        .then(() => sendResponse({ ok: true }))
+        .catch((e: unknown) => sendResponse({ ok: false, error: String(e) }));
+      return true;
     }
     return false;
   });
 
-  // Persistent WS connection.
+  // ─── Persistent inbox WS ─────────────────────────────────────────────────
+
   let ws: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -61,7 +73,6 @@ export default defineBackground(() => {
     if (!identity) return;
     const wsUrl = `${identity.serverUrl.replace(/^http/, 'ws')}/api/v1/ws`;
     ws = new WebSocket(wsUrl);
-
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data as string) as {
         type: string;
@@ -103,6 +114,7 @@ export default defineBackground(() => {
       const payload = JSON.parse(new TextDecoder().decode(plaintext)) as {
         kind: string;
         url?: string;
+        filename?: string;
       };
 
       if (payload.kind === 'url' && payload.url) {
@@ -111,6 +123,13 @@ export default defineBackground(() => {
           iconUrl: '/icon/128.png',
           title: 'Beam',
           message: payload.url,
+        });
+      } else if (payload.kind === 'file' && payload.filename) {
+        await browser.notifications.create({
+          type: 'basic',
+          iconUrl: '/icon/128.png',
+          title: 'Beam — file received',
+          message: `${payload.filename} — open the Beam web app to download`,
         });
       }
 
@@ -123,75 +142,44 @@ export default defineBackground(() => {
     }
   }
 
-  async function sendUrl(url: string, recipientId?: string) {
-    const identity = await loadIdentity();
-    if (!identity) throw new Error('Not set up');
+  // ─── Send helpers ────────────────────────────────────────────────────────
 
+  async function resolveRecipient(
+    identity: Awaited<ReturnType<typeof loadIdentity>>,
+    explicitId: string | undefined,
+    url?: string,
+  ): Promise<{ identity: NonNullable<typeof identity>; recipient: ServerDevice }> {
+    if (!identity) throw new Error('Not set up');
     const devRes = await signedFetch(identity, '/api/v1/devices', { method: 'GET' });
-    const devices = (await devRes.json()) as Array<{ id: string; name: string; kexPub: string }>;
+    const devices = (await devRes.json()) as ServerDevice[];
     const others = devices.filter((d) => d.id !== identity.deviceId);
     if (others.length === 0) throw new Error('No other devices to send to');
 
-    // Resolution order: explicit recipientId from caller (popup picked) >
-    // routing-rule match > first-other-device fallback (context-menu default).
-    let resolved: (typeof others)[number] | undefined;
-    if (recipientId) {
-      resolved = others.find((d) => d.id === recipientId);
+    let resolved: ServerDevice | undefined;
+    if (explicitId) {
+      resolved = others.find((d) => d.id === explicitId);
     } else {
-      const rules = await listRules();
-      const ruleMatch = suggestDevice(rules, url);
-      if (ruleMatch) resolved = others.find((d) => d.id === ruleMatch);
+      if (url) {
+        const rules = await listRules();
+        const ruleMatch = suggestDevice(rules, url);
+        if (ruleMatch) resolved = others.find((d) => d.id === ruleMatch);
+      }
       if (!resolved) resolved = others[0];
     }
     if (!resolved) throw new Error('Recipient not found');
-    const recipient = resolved;
+    return { identity, recipient: resolved };
+  }
 
-    const {
-      bytesToB64u: b64u,
-      encryptPayload,
-      generateEphemeral,
-      sign: signMsg,
-      wrapKey,
-    } = await import('@routr/crypto');
-    const { canonicalize, PROTOCOL_VERSION } = await import('@routr/protocol');
+  async function sendUrl(url: string, recipientId?: string) {
+    const id = await loadIdentity();
+    const { identity, recipient } = await resolveRecipient(id, recipientId, url);
+    await senderSendUrl(identity, recipient, url);
+  }
 
-    const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
-    const { payloadKey, ciphertext } = encryptPayload(plaintext);
-    const ephem = generateEphemeral();
-    const b64 = recipient.kexPub.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = `${b64}${'='.repeat((4 - (b64.length % 4)) % 4)}`;
-    const recipientKexPub = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-    const wrapped = wrapKey(
-      payloadKey,
-      ephem.secretKey,
-      ephem.publicKey,
-      recipientKexPub,
-      recipient.id,
-    );
-
-    const now = Date.now();
-    const envelope = {
-      v: PROTOCOL_VERSION,
-      id: '',
-      from: identity.deviceId,
-      to: [recipient.id],
-      createdAt: now,
-      expiresAt: now + 86400_000,
-      kind: 'url' as const,
-      size: plaintext.length,
-      ciphertext: b64u(ciphertext),
-      senderEphemeralPub: b64u(ephem.publicKey),
-      wrappedKeys: { [recipient.id]: b64u(wrapped) },
-      signature: '',
-    };
-    const signedForm = canonicalize(
-      Object.fromEntries(Object.entries(envelope).filter(([k]) => k !== 'id' && k !== 'signature')),
-    );
-    const sig = signMsg(identity.signSecretKey, new TextEncoder().encode(signedForm));
-    await signedFetch(identity, '/api/v1/envelopes', {
-      method: 'POST',
-      body: JSON.stringify({ ...envelope, signature: b64u(sig) }),
-    });
+  async function sendFile(data: Uint8Array, filename: string, mime: string, recipientId?: string) {
+    const id = await loadIdentity();
+    const { identity, recipient } = await resolveRecipient(id, recipientId);
+    await senderSendFile(identity, recipient, data, filename, mime);
   }
 
   void connectWs();
