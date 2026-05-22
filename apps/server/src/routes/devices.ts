@@ -44,6 +44,7 @@ devicesRoute.get('/', requireDeviceAuth, (c) => {
       platform: d.platform,
       kexPub: d.kexPub,
       signPub: d.signPub,
+      lastSeenAt: d.lastSeenAt?.getTime() ?? null,
     })),
   );
 });

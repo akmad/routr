@@ -88,10 +88,17 @@ export function listDevicesForUser(db: Db, userId: string) {
       platform: devices.platform,
       kexPub: devices.kexPub,
       signPub: devices.signPub,
+      lastSeenAt: devices.lastSeenAt,
     })
     .from(devices)
     .where(eq(devices.userId, userId))
     .all();
+}
+
+/** Bump the last-seen-at timestamp. Cheap update; fire-and-forget from
+ *  the auth path. */
+export function touchLastSeen(db: Db, deviceId: string, now: Date = new Date()): void {
+  db.update(devices).set({ lastSeenAt: now }).where(eq(devices.id, deviceId)).run();
 }
 
 export type RevokeResult =

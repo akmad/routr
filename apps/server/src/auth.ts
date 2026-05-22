@@ -3,7 +3,7 @@ import { b64uToBytes, verify } from '@routr/crypto';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv } from './app.js';
 import type { NonceStore } from './nonce-store.js';
-import { getDeviceById } from './services/devices.js';
+import { getDeviceById, touchLastSeen } from './services/devices.js';
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -108,5 +108,6 @@ async function authenticate(
     return { ok: false, reason: 'bad_signature' };
   }
 
+  touchLastSeen(db, device.id);
   return { ok: true, deviceId: device.id, userId: device.userId };
 }

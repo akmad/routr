@@ -3,7 +3,7 @@ import { b64uToBytes, verify } from '@routr/crypto';
 import * as v from 'valibot';
 import type { Db } from '../db/index.js';
 import type { Logger } from '../logger.js';
-import { getDeviceById } from '../services/devices.js';
+import { getDeviceById, touchLastSeen } from '../services/devices.js';
 import { listPendingFor } from '../services/envelopes.js';
 import {
   AuthMessageSchema,
@@ -115,6 +115,7 @@ export class WsSession {
     };
     this.state = { stage: 'authed', deviceId, userId: device.userId, conn };
     this.deps.registry.add(conn);
+    touchLastSeen(this.deps.db, deviceId);
 
     const ok: AuthenticatedMessage = { type: 'authenticated' };
     this.tx.send(JSON.stringify(ok));

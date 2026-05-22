@@ -492,7 +492,17 @@ type DeviceInfo = {
   platform: string;
   kexPub: string;
   signPub: string;
+  lastSeenAt: number | null;
 };
+
+function relativeTime(ms: number | null): string {
+  if (ms == null) return 'never';
+  const diffSec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (diffSec < 60) return 'just now';
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
+  return `${Math.round(diffSec / 86400)}d ago`;
+}
 type Invite = { token: string };
 
 function DevicesPage() {
@@ -562,7 +572,8 @@ function DevicesPage() {
                     {isSelf && <span className="text-xs text-indigo-500 ml-1">(this device)</span>}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {d.platform} &middot; {d.id.slice(0, 8)}…
+                    {d.platform} &middot; {d.id.slice(0, 8)}… &middot; seen{' '}
+                    {relativeTime(d.lastSeenAt)}
                   </p>
                   <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
                 </div>
