@@ -9,6 +9,7 @@ import {
   newRuleId,
   saveRule,
 } from '../../lib/rules.js';
+import { type SentItem, clearSent, listSent } from '../../lib/sent.js';
 
 type Device = { id: string; name: string };
 
@@ -20,6 +21,7 @@ export function Options() {
   const [patternType, setPatternType] = useState<RulePattern['type']>('url_contains');
   const [patternValue, setPatternValue] = useState('');
   const [targetDeviceId, setTargetDeviceId] = useState('');
+  const [sent, setSent] = useState<SentItem[]>([]);
 
   useEffect(() => {
     void loadIdentity().then(async (id) => {
@@ -29,8 +31,17 @@ export function Options() {
       const list = (await res.json()) as Device[];
       setDevices(list.filter((d) => d.id !== id.deviceId));
       setRules(await listRules());
+      setSent(await listSent());
     });
   }, []);
+
+  async function onClearSent() {
+    if (!confirm('Clear local sent log? Only affects this extension.')) return;
+    await clearSent();
+    setSent([]);
+  }
+
+  const deviceName = (id: string) => devices.find((d) => d.id === id)?.name ?? id.slice(0, 8);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -176,6 +187,40 @@ export function Options() {
             Add rule
           </button>
         </form>
+      </div>
+
+      <div className="border-t pt-4 mt-8">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-sm font-semibold">Sent log</h2>
+          {sent.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void onClearSent()}
+              className="text-xs text-red-500 hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {sent.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">Nothing sent yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sent.slice(0, 50).map((it) => (
+              <li key={it.id} className="bg-white border border-gray-200 rounded px-3 py-2">
+                <p className="text-xs break-all">
+                  {it.kind === 'file' && '📎 '}
+                  {it.kind === 'note' && '📝 '}
+                  {it.summary}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  to {it.recipientIds.map(deviceName).join(', ')} &middot;{' '}
+                  {new Date(it.at).toLocaleString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

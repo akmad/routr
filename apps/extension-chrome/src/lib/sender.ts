@@ -9,6 +9,7 @@ import {
 import { PROTOCOL_VERSION, canonicalize } from '@routr/protocol';
 import { signedFetch } from './api.js';
 import type { StoredIdentity } from './keystore.js';
+import { recordSend } from './sent.js';
 
 export type Recipient = { id: string; kexPub: string };
 
@@ -75,6 +76,11 @@ export async function sendUrl(
 ): Promise<void> {
   const plaintext = new TextEncoder().encode(JSON.stringify({ kind: 'url', url }));
   await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'url'));
+  await recordSend({
+    kind: 'url',
+    recipientIds: recipients.map((r) => r.id),
+    summary: url,
+  });
 }
 
 export async function sendNote(
@@ -87,6 +93,11 @@ export async function sendNote(
   if (title) payload.title = title;
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, plaintext, 'note'));
+  await recordSend({
+    kind: 'note',
+    recipientIds: recipients.map((r) => r.id),
+    summary: title ?? text.slice(0, 120),
+  });
 }
 
 /**
@@ -136,4 +147,9 @@ export async function sendFile(
   };
   const payloadBytes = new TextEncoder().encode(JSON.stringify(filePayload));
   await postEnvelope(identity, buildAndSignEnvelope(identity, recipients, payloadBytes, 'file'));
+  await recordSend({
+    kind: 'file',
+    recipientIds: recipients.map((r) => r.id),
+    summary: `${filename} (${Math.round(data.length / 1024)} KB)`,
+  });
 }
