@@ -656,7 +656,7 @@ function relativeTime(ms: number | null): string {
   if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
   return `${Math.round(diffSec / 86400)}d ago`;
 }
-type Invite = { token: string };
+type Invite = { token: string; expiresAt: number };
 
 function DevicesPage() {
   const identity = useIdentity();
@@ -773,6 +773,9 @@ function DevicesPage() {
           <div className="mt-3 bg-gray-50 border border-gray-200 rounded p-3">
             <p className="text-xs text-gray-500 mb-1">Share this code with the new device:</p>
             <code className="text-sm font-mono break-all select-all">{invite.token}</code>
+            <p className="text-xs text-gray-400 mt-1">
+              Expires {new Date(invite.expiresAt).toLocaleString()} &middot; single use
+            </p>
           </div>
         )}
       </div>
