@@ -18,7 +18,12 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { handleRevoked, signedFetch } from './lib/api.js';
-import { clearIdentity } from './lib/keystore.js';
+import {
+  clearIdentity,
+  inspectStoredIdentity,
+  saveEncryptedIdentity,
+  saveIdentity,
+} from './lib/keystore.js';
 import {
   type Rule,
   type RulePattern,
@@ -824,6 +829,7 @@ function SettingsPage() {
           <span className="ml-2 font-mono text-xs">{identity.userId}</span>
         </div>
       </div>
+      <PassphrasePanel />
       <button
         type="button"
         onClick={() => void handleForget()}
@@ -835,6 +841,175 @@ function SettingsPage() {
         Clears local keys only. To remove this device from the server (so it can't receive
         messages), open the Beam app on a different device and revoke it from there.
       </p>
+    </div>
+  );
+}
+
+// ─── Passphrase panel (used by SettingsPage) ─────────────────────────────────
+
+type PassphraseMode = 'idle' | 'set' | 'change' | 'remove';
+
+function PassphrasePanel() {
+  const identity = useIdentity();
+  const [encrypted, setEncrypted] = useState<boolean | null>(null);
+  const [mode, setMode] = useState<PassphraseMode>('idle');
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [okMsg, setOkMsg] = useState('');
+
+  useEffect(() => {
+    void inspectStoredIdentity().then((entry) => setEncrypted(entry.kind === 'encrypted'));
+  }, []);
+
+  function reset() {
+    setMode('idle');
+    setPw1('');
+    setPw2('');
+    setError('');
+  }
+
+  async function onSetOrChange(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (pw1.length < 8) {
+      setError('Passphrase must be at least 8 characters.');
+      return;
+    }
+    if (pw1 !== pw2) {
+      setError('Passphrases do not match.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveEncryptedIdentity(identity, pw1);
+      setEncrypted(true);
+      setOkMsg(mode === 'set' ? 'Passphrase set.' : 'Passphrase changed.');
+      reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set passphrase');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRemove() {
+    setError('');
+    if (!confirm('Remove the passphrase? Your identity will be stored unencrypted again.')) return;
+    setBusy(true);
+    try {
+      await saveIdentity(identity);
+      setEncrypted(false);
+      setOkMsg('Passphrase removed.');
+      reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove passphrase');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (encrypted === null) return null; // Still loading the current state.
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 text-sm">
+      <h2 className="font-semibold mb-2">Passphrase</h2>
+      <p className="text-xs text-gray-500 mb-3">
+        {encrypted
+          ? 'Your identity is encrypted on this device. You needed your passphrase to unlock the app.'
+          : 'Your identity is stored unencrypted on this device. Set a passphrase so that anyone with access to this browser still needs it to use your account.'}
+      </p>
+      {okMsg && <p className="text-green-600 text-xs mb-2">{okMsg}</p>}
+
+      {mode === 'idle' && (
+        <div className="flex gap-3">
+          {!encrypted && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('set');
+                setOkMsg('');
+              }}
+              className="text-indigo-600 hover:underline"
+            >
+              Set passphrase
+            </button>
+          )}
+          {encrypted && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('change');
+                  setOkMsg('');
+                }}
+                className="text-indigo-600 hover:underline"
+              >
+                Change passphrase
+              </button>
+              <button
+                type="button"
+                onClick={() => void onRemove()}
+                className="text-red-600 hover:underline"
+              >
+                Remove passphrase
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {(mode === 'set' || mode === 'change') && (
+        <form onSubmit={(e) => void onSetOrChange(e)} className="space-y-2">
+          <div>
+            <label htmlFor="pp-pw1" className="block text-xs text-gray-500 mb-1">
+              New passphrase
+            </label>
+            <input
+              id="pp-pw1"
+              type="password"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={pw1}
+              onChange={(e) => setPw1(e.target.value)}
+              // biome-ignore lint/a11y/noAutofocus: user just clicked Set/Change — focus is the obvious next step
+              autoFocus
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="pp-pw2" className="block text-xs text-gray-500 mb-1">
+              Confirm
+            </label>
+            <input
+              id="pp-pw2"
+              type="password"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={pw2}
+              onChange={(e) => setPw2(e.target.value)}
+              required
+            />
+          </div>
+          {error && <p className="text-red-600 text-xs">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="bg-indigo-600 text-white rounded px-4 py-2 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {busy ? 'Saving…' : mode === 'set' ? 'Set' : 'Change'}
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              disabled={busy}
+              className="text-gray-500 text-xs hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

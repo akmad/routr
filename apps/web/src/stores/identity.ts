@@ -1,16 +1,18 @@
 import { bytesToB64u, generateIdentity } from '@routr/crypto';
 import { createContext, useContext } from 'react';
 import { registerDevice } from '../lib/api.js';
-import { type StoredIdentity, loadIdentity, saveIdentity } from '../lib/keystore.js';
+import { type StoredIdentity, inspectStoredIdentity, saveIdentity } from '../lib/keystore.js';
 
 export type IdentityState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
+  | { status: 'needs-passphrase' }
   | { status: 'authenticated'; identity: StoredIdentity };
 
 export async function attemptLoad(): Promise<IdentityState> {
-  const stored = await loadIdentity();
-  if (stored) return { status: 'authenticated', identity: stored };
+  const entry = await inspectStoredIdentity();
+  if (entry.kind === 'plain') return { status: 'authenticated', identity: entry.identity };
+  if (entry.kind === 'encrypted') return { status: 'needs-passphrase' };
   return { status: 'unauthenticated' };
 }
 

@@ -8,6 +8,20 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Passphrase-encrypted keystore** (opt-in, web app): the identity
+  blob in IndexedDB can now be encrypted at rest with a user-chosen
+  passphrase. Pipeline: PBKDF2-HMAC-SHA-256 (600k iterations, OWASP
+  2023 floor) via WebCrypto → 32-byte key → ChaCha20-Poly1305 with
+  random 16-byte salt and 12-byte nonce. Blob is self-describing
+  (`algorithm` tag + parameters) so future versions can upgrade
+  params without breaking old data. New crypto exports:
+  `wrapWithPassphrase`, `unwrapWithPassphrase`, `WrongPassphraseError`,
+  `UnsupportedAlgorithmError`. App.tsx renders an "Unlock Beam" screen
+  before the router mounts when an encrypted blob is present.
+  Settings page gains a Passphrase panel: Set / Change / Remove,
+  with confirm-match validation and a length floor. No change to
+  users who don't opt in — plain-text storage remains the default
+  for backward compatibility.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

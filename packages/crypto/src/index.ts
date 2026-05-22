@@ -16,3 +16,11 @@ export {
   generateEphemeral,
 } from './seal.js';
 export { fingerprint } from './fingerprint.js';
+export {
+  type EncryptedBlob,
+  isEncryptedBlob,
+  UnsupportedAlgorithmError,
+  unwrapWithPassphrase,
+  wrapWithPassphrase,
+  WrongPassphraseError,
+} from './passphrase.js';
