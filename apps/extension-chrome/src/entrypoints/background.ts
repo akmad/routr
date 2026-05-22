@@ -7,6 +7,16 @@ import type { InboxMessage } from '../lib/ws.js';
 
 type ServerDevice = { id: string; name: string; kexPub: string };
 
+// `browser.runtime.getBrowserInfo` only exists on Firefox. Used to gate
+// Chrome-only context menu contexts like 'action' (the toolbar icon
+// right-click), which Firefox rejects at create() time.
+const IS_FIREFOX =
+  typeof (browser.runtime as { getBrowserInfo?: unknown }).getBrowserInfo === 'function';
+
+// `'action'` (right-click on the toolbar button) is a Chrome-MV3 context;
+// Firefox throws on it. Drop it when on Firefox so the rest still installs.
+const TAB_CONTEXTS = IS_FIREFOX ? (['page'] as const) : (['page', 'action'] as const);
+
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
@@ -17,7 +27,7 @@ export default defineBackground(() => {
     browser.contextMenus.create({
       id: 'beam-send-tab',
       title: 'Send this tab with Beam',
-      contexts: ['page', 'action'],
+      contexts: [...TAB_CONTEXTS],
     });
     browser.contextMenus.create({
       id: 'beam-send-image',

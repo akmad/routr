@@ -3,7 +3,7 @@
 [![CI](https://github.com/akmad/routr/actions/workflows/ci.yml/badge.svg)](https://github.com/akmad/routr/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](./LICENSE)
 
-> **Status:** MVP. Server + web app + Chrome extension work end-to-end on
+> **Status:** MVP. Server + web app + Chrome/Firefox extension work end-to-end on
 > a single host. See [PLAN.md](./PLAN.md) for what's done and what's next.
 
 Beam is an open-source, self-hostable replacement for PushBullet. Send URLs and
@@ -23,11 +23,17 @@ Project codename / repo / CLI: `routr`. User-facing name: **Beam**.
   (URL/file/note + multi-recipient), sent log, devices with fingerprints
   + revoke buttons, routing rules, settings. Keys in IndexedDB; live
   decryption in the browser.
-- **Chrome extension** — `apps/extension-chrome`: popup "Send this tab"
+- **Browser extension** — `apps/extension-chrome`: builds for both
+  Chrome (MV3) and Firefox (MV3, Firefox 109+). Popup "Send this tab"
   + file send + recipient picker, Ctrl+Shift+B keyboard shortcut,
   context-menu items (link / tab / image), options page for routing
   rules + sent log, background WS with desktop notifications on
   incoming URLs/files/notes.
+  - Chrome bundle: `pnpm --filter @routr/extension-chrome build`
+    (`.output/chrome-mv3/`)
+  - Firefox bundle: `pnpm --filter @routr/extension-chrome build:firefox`
+    (`.output/firefox-mv3/`)
+  - Both: `pnpm --filter @routr/extension-chrome build:all`
 
 ## Self-hosting (Docker)
 
@@ -97,11 +103,11 @@ location / {
 
 - Self-hostable server (single Docker container, SQLite by default)
 - Web app — pair this browser as a device, send/receive, inbox
-- Chrome extension — share the current tab via toolbar / right-click
+- Browser extension (Chrome + Firefox) — share the current tab via toolbar / right-click
 
 ## Planned (later)
 
-- Firefox, Safari extensions
+- Safari extension
 - Native desktop (macOS, Windows, Linux)
 - iOS and Android apps
 - Routing rules ("YouTube links go to Firefox")

@@ -8,6 +8,13 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Firefox extension** (parity with Chrome): the same `apps/extension-chrome`
+  package now builds for Firefox MV3 (Firefox 109+). New scripts:
+  `build:firefox`, `dev:firefox`, `zip:firefox`, `build:all`. The Chrome-
+  only `'action'` context menu context is filtered out at runtime via
+  feature detection (`browser.runtime.getBrowserInfo` is Firefox-only).
+  Adds `browser_specific_settings.gecko` (id + `strict_min_version`);
+  Chrome ignores the key.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

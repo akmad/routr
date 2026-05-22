@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
+    "dev:firefox": "wxt --browser firefox --mv3",
     "build": "wxt build",
+    "build:firefox": "wxt build --browser firefox --mv3",
+    "build:all": "wxt build && wxt build --browser firefox --mv3",
     "typecheck": "wxt prepare && tsc --noEmit",
     "zip": "wxt zip",
+    "zip:firefox": "wxt zip --browser firefox --mv3",
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
