@@ -8,6 +8,11 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Auto-refreshing Devices page**: the web Devices page now both
+  re-renders every 30s (so "seen 2m ago" doesn't go stale) and
+  re-fetches `/api/v1/devices` on the same cadence (so a peer that
+  just came online or disconnected shows up without a manual
+  reload). Cheap: one signed GET per device per 30s.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

@@ -656,6 +656,16 @@ function relativeTime(ms: number | null): string {
   if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
   return `${Math.round(diffSec / 86400)}d ago`;
 }
+
+// Re-render the component every `intervalMs` so anything computed from
+// `Date.now()` (e.g. relativeTime) stays accurate without a page reload.
+function useRefreshTick(intervalMs: number): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+}
 type Invite = { token: string; expiresAt: number };
 
 function DevicesPage() {
@@ -666,11 +676,27 @@ function DevicesPage() {
   const [busy, setBusy] = useState(false);
   const [revokeError, setRevokeError] = useState('');
 
+  // Tick every 30s so "seen Xm ago" stays in sync without manual refresh.
+  useRefreshTick(30_000);
+
   useEffect(() => {
-    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
-      .then((r) => r.json())
-      .then((d) => setDevList(d as DeviceInfo[]))
-      .catch(() => {});
+    let cancelled = false;
+    function refetch() {
+      void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!cancelled) setDevList(d as DeviceInfo[]);
+        })
+        .catch(() => {});
+    }
+    refetch();
+    // Poll every 30s so newly-connected devices show up without a reload.
+    // Cheap: one signed GET; same cadence as the tick above.
+    const id = setInterval(refetch, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [identity]);
 
   async function issueInvite(e: FormEvent) {
