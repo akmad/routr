@@ -11,21 +11,15 @@ import { listRules, suggestDevice } from '../../lib/rules.js';
 
 type Device = { id: string; name: string; kexPub: string; signPub: string };
 
-type Status = 'loading' | 'setup' | 'ready';
+type State = { tag: 'loading' } | { tag: 'setup' } | { tag: 'ready'; identity: StoredIdentity };
 
 export function Popup() {
-  const [status, setStatus] = useState<Status>('loading');
-  const [identity, setIdentity] = useState<StoredIdentity | null>(null);
+  const [state, setState] = useState<State>({ tag: 'loading' });
   const [currentTabUrl, setCurrentTabUrl] = useState('');
 
   useEffect(() => {
     void loadIdentity().then((id) => {
-      if (id) {
-        setIdentity(id);
-        setStatus('ready');
-      } else {
-        setStatus('setup');
-      }
+      setState(id ? { tag: 'ready', identity: id } : { tag: 'setup' });
     });
 
     void browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
@@ -33,16 +27,15 @@ export function Popup() {
     });
   }, []);
 
-  if (status === 'loading') {
+  if (state.tag === 'loading') {
     return <div className="w-72 p-4 text-sm text-gray-400">Loading…</div>;
   }
 
-  if (status === 'setup') {
+  if (state.tag === 'setup') {
     return (
       <SetupPanel
         onDone={(id) => {
-          setIdentity(id);
-          setStatus('ready');
+          setState({ tag: 'ready', identity: id });
         }}
       />
     );
@@ -50,12 +43,11 @@ export function Popup() {
 
   return (
     <ReadyPanel
-      identity={identity!}
+      identity={state.identity}
       currentTabUrl={currentTabUrl}
       onForget={() => {
         void clearIdentity();
-        setStatus('setup');
-        setIdentity(null);
+        setState({ tag: 'setup' });
       }}
     />
   );

@@ -408,16 +408,16 @@ function InboxPage() {
                 {item.url}
               </a>
             ) : item.kind === 'file' && item.file ? (
-              <button
-                type="button"
-                onClick={() => void downloadAndDecryptFile(identity, item.file!)}
-                className="text-indigo-600 hover:underline text-sm break-all text-left"
-              >
-                📎 {item.file.name}{' '}
-                <span className="text-gray-400 text-xs">
-                  ({Math.round(item.file.size / 1024)} KB)
-                </span>
-              </button>
+              ((file) => (
+                <button
+                  type="button"
+                  onClick={() => void downloadAndDecryptFile(identity, file)}
+                  className="text-indigo-600 hover:underline text-sm break-all text-left"
+                >
+                  📎 {file.name}{' '}
+                  <span className="text-gray-400 text-xs">({Math.round(file.size / 1024)} KB)</span>
+                </button>
+              ))(item.file)
             ) : item.kind === 'note' && item.note ? (
               <div>
                 {item.note.title && <p className="text-sm font-medium mb-1">{item.note.title}</p>}
