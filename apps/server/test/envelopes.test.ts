@@ -21,6 +21,7 @@ import { createLogger } from '../src/logger.js';
 import { registerDevice } from '../src/services/devices.js';
 import {
   ackEnvelope,
+  cleanupExpiredEnvelopes,
   envelopeExists,
   listPendingFor,
   pendingCountFor,
@@ -209,6 +210,80 @@ describe('submitEnvelope', () => {
     const replay = submitEnvelope(db, env);
     expect(replay.ok).toBe(false);
     if (!replay.ok) expect(replay.reason).toBe('duplicate');
+  });
+});
+
+describe('cleanupExpiredEnvelopes', () => {
+  it('deletes envelopes whose expiresAt is past', () => {
+    const db = makeDb();
+    const senderIdentity = generateIdentity();
+    const recipientIdentity = generateIdentity();
+    const r1 = registerDevice(db, {
+      name: 'sender',
+      platform: 'web',
+      signPub: bytesToB64u(senderIdentity.sign.publicKey),
+      kexPub: bytesToB64u(senderIdentity.kex.publicKey),
+    });
+    if (!r1.ok) throw new Error('r1');
+    const inv = createInvite(db, { scope: 'signup', userId: null, ttlMs: 60_000 });
+    const r2 = registerDevice(db, {
+      name: 'recipient',
+      platform: 'android',
+      signPub: bytesToB64u(recipientIdentity.sign.publicKey),
+      kexPub: bytesToB64u(recipientIdentity.kex.publicKey),
+      invite: inv.token,
+    });
+    if (!r2.ok) throw new Error('r2');
+
+    const env = makeEnvelope(
+      senderIdentity,
+      r1.deviceId,
+      r2.deviceId,
+      recipientIdentity.kex.publicKey,
+    );
+    const submit = submitEnvelope(db, env);
+    if (!submit.ok) throw new Error('submit');
+
+    // The envelope's expiresAt is now + 86400_000 — sweep at way-future shows 1 deleted.
+    const future = new Date(Date.now() + 100 * 86400_000);
+    const deleted = cleanupExpiredEnvelopes(db, future);
+    expect(deleted).toBe(1);
+    expect(envelopeExists(db, submit.id)).toBe(false);
+  });
+
+  it('leaves non-expired envelopes alone', () => {
+    const db = makeDb();
+    const senderIdentity = generateIdentity();
+    const recipientIdentity = generateIdentity();
+    const r1 = registerDevice(db, {
+      name: 'sender',
+      platform: 'web',
+      signPub: bytesToB64u(senderIdentity.sign.publicKey),
+      kexPub: bytesToB64u(senderIdentity.kex.publicKey),
+    });
+    if (!r1.ok) throw new Error('r1');
+    const inv = createInvite(db, { scope: 'signup', userId: null, ttlMs: 60_000 });
+    const r2 = registerDevice(db, {
+      name: 'recipient',
+      platform: 'android',
+      signPub: bytesToB64u(recipientIdentity.sign.publicKey),
+      kexPub: bytesToB64u(recipientIdentity.kex.publicKey),
+      invite: inv.token,
+    });
+    if (!r2.ok) throw new Error('r2');
+
+    const env = makeEnvelope(
+      senderIdentity,
+      r1.deviceId,
+      r2.deviceId,
+      recipientIdentity.kex.publicKey,
+    );
+    const submit = submitEnvelope(db, env);
+    if (!submit.ok) throw new Error('submit');
+
+    const deleted = cleanupExpiredEnvelopes(db, new Date());
+    expect(deleted).toBe(0);
+    expect(envelopeExists(db, submit.id)).toBe(true);
   });
 });
 

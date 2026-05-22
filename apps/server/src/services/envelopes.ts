@@ -1,6 +1,6 @@
 import { b64uToBytes, verify } from '@routr/crypto';
 import { type Envelope, envelopeSignedForm } from '@routr/protocol';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { devices, envelopes, recipients } from '../db/schema.js';
 import { newId } from '../ids.js';
@@ -210,3 +210,15 @@ export function envelopeExists(db: Db, envelopeId: string): boolean {
 
 // Silence unused-import linter for combinators we may need later.
 void isNotNull;
+
+/**
+ * Delete envelopes whose `expiresAt` is in the past. Recipients cascade
+ * via the FK ON DELETE. Returns the number of deleted rows.
+ *
+ * Called periodically by main.ts (and could be called opportunistically
+ * from the request path if we wanted to bound table growth more tightly).
+ */
+export function cleanupExpiredEnvelopes(db: Db, now: Date = new Date()): number {
+  const result = db.delete(envelopes).where(lt(envelopes.expiresAt, now)).run();
+  return result.changes;
+}

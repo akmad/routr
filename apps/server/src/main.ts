@@ -6,6 +6,7 @@ import { openDatabase } from './db/index.js';
 import { runMigrations } from './db/migrate.js';
 import { createLogger } from './logger.js';
 import { wsRoute } from './routes/ws.js';
+import { cleanupExpiredEnvelopes } from './services/envelopes.js';
 
 function main(): void {
   const config = loadConfig();
@@ -26,6 +27,18 @@ function main(): void {
     log.info({ host: info.address, port: info.port }, 'listening');
   });
   injectWebSocket(server);
+
+  // Sweep expired envelopes every 5 minutes. Cheap query on a small table;
+  // no foreground impact.
+  const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+  setInterval(() => {
+    try {
+      const n = cleanupExpiredEnvelopes(db);
+      if (n > 0) log.info({ deleted: n }, 'swept expired envelopes');
+    } catch (err) {
+      log.error({ err }, 'envelope cleanup failed');
+    }
+  }, CLEANUP_INTERVAL_MS).unref();
 }
 
 main();
