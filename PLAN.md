@@ -29,9 +29,13 @@ queue up next, or fix whatever surfaces in real-use bug reports._
 
 ## Next
 
-- [ ] App icons (PNG bundle for extension; SVG already in web).
-- [ ] Web component tests (React Testing Library) for the pages.
-- [ ] CLI for server admin operations beyond the stats endpoint.
+- [x] App icons (PNG bundle for extension; SVG already in web).
+  — `claude/extension-icons` branch.
+- [x] Web component tests (React Testing Library) for the pages.
+  — `claude/web-component-tests` branch.
+- [x] CLI for server admin operations beyond the stats endpoint.
+  — `claude/admin-cli` branch. Local DB tool: stats, users/devices
+  list+remove, envelope/blob/invite prunes, cleanup-all.
 
 ## Backlog (scoped, not started)
 

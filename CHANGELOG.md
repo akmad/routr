@@ -8,6 +8,14 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Admin CLI** (`pnpm --filter @routr/server cli`): operator commands
+  that act directly on the SQLite DB (admin = filesystem access; no
+  separate admin role). Covers stats, list/remove users + devices,
+  prune expired envelopes / used invites, age-out blobs (with an
+  `--max-age-days` knob), prune orphan blobs left behind by a user
+  deletion, and an aggregate `cleanup` that runs all the prunes.
+  Destructive ops confirm by default; `--force` bypasses. `--json`
+  output where it makes sense. 26 unit tests.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

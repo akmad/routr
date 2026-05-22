@@ -93,6 +93,38 @@ location / {
 3. To pair another device: open **Devices**, click *Generate invite*,
    and paste that code into the new device's setup screen.
 
+### Admin CLI
+
+Server-side operator commands. Operates directly on the SQLite DB —
+admin = filesystem access to the server's data dir, no separate admin
+role.
+
+```sh
+# From the repo root:
+pnpm --filter @routr/server cli help
+
+# Inside a docker exec — point DATABASE_URL at the mounted data file:
+docker exec -it beam-server \
+  env DATABASE_URL=/data/routr.db BLOB_STORAGE_DIR=/data/blobs \
+  node --import tsx apps/server/src/cli.ts <command>
+```
+
+Common operations:
+
+```sh
+pnpm --filter @routr/server cli stats           # counts
+pnpm --filter @routr/server cli users list
+pnpm --filter @routr/server cli users remove <user-id>     # confirms + cascades
+pnpm --filter @routr/server cli devices list --user-id <id>
+pnpm --filter @routr/server cli devices remove <device-id> # force-revoke
+pnpm --filter @routr/server cli cleanup         # prune expired/used
+pnpm --filter @routr/server cli invites list    # active tokens only
+pnpm --filter @routr/server cli blobs prune-orphans  # blobs with no envelope
+```
+
+`--json` is supported on the `list` and `stats` commands. Destructive
+commands prompt for confirmation unless `--force` is passed.
+
 ## Planned (v1.0)
 
 - Self-hostable server (single Docker container, SQLite by default)
