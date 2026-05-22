@@ -58,4 +58,22 @@ export class ConnectionRegistry {
     for (const set of this.byDevice.values()) n += set.size;
     return n;
   }
+
+  /**
+   * Close every connection in the registry. Used during graceful shutdown so
+   * clients see a clean 1001 (going away) frame rather than a TCP RST.
+   * `code` defaults to 1001; `reason` is forwarded verbatim.
+   */
+  closeAll(code = 1001, reason?: string): void {
+    for (const set of this.byDevice.values()) {
+      for (const conn of set) {
+        try {
+          conn.close(code, reason);
+        } catch {
+          // Best-effort — a transport already in an error state can throw.
+        }
+      }
+    }
+    this.byDevice.clear();
+  }
 }

@@ -9,6 +9,7 @@ import { wsRoute } from './routes/ws.js';
 import { cleanupOldBlobs } from './services/blobs.js';
 import { cleanupExpiredEnvelopes } from './services/envelopes.js';
 import { cleanupInvites } from './services/invites.js';
+import { gracefulShutdown } from './shutdown.js';
 
 function main(): void {
   const config = loadConfig();
@@ -17,7 +18,7 @@ function main(): void {
   log.info({ config: { ...config, databaseUrl: config.databaseUrl } }, 'starting routr server');
 
   runMigrations(config.databaseUrl);
-  const { db } = openDatabase(config.databaseUrl);
+  const { db, raw } = openDatabase(config.databaseUrl);
 
   const { app, registry } = createApp({ db, log, blobStorageDir: config.blobStorageDir });
 
@@ -29,6 +30,24 @@ function main(): void {
     log.info({ host: info.address, port: info.port }, 'listening');
   });
   injectWebSocket(server);
+
+  // SIGTERM is what `docker stop` and most orchestrators send; SIGINT is
+  // Ctrl-C in a dev terminal. Same handler — once either fires, install a
+  // no-op for the other so a frustrated double-Ctrl-C doesn't reenter.
+  let shuttingDown = false;
+  const onSignal = (sig: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log.info({ signal: sig }, 'shutdown signal received');
+    void gracefulShutdown({ server, registry, rawDb: raw, log })
+      .then(() => process.exit(0))
+      .catch((err) => {
+        log.error({ err }, 'shutdown failed');
+        process.exit(1);
+      });
+  };
+  process.on('SIGTERM', onSignal);
+  process.on('SIGINT', onSignal);
 
   // Sweep expired envelopes every 5 minutes. Cheap query on a small table;
   // no foreground impact.

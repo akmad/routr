@@ -8,6 +8,16 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Graceful shutdown on SIGTERM / SIGINT**: `docker stop`, Ctrl-C,
+  and orchestrator-driven restarts now drain cleanly instead of
+  hard-killing in-flight requests. Sequence: stop accepting new HTTP
+  connections → close every registered WS with a 1001 "going away"
+  frame → wait up to 10s for in-flight requests to finish → close the
+  SQLite handle so the WAL flushes. A timeout backstop force-exits
+  after the deadline. Implemented as a pure `gracefulShutdown({server,
+  registry, rawDb, log, timeoutMs})` in `apps/server/src/shutdown.ts`
+  with 5 unit tests (no-work / draining / timeout / WS-close fanout /
+  DB-close error tolerance).
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
