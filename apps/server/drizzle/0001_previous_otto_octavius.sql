@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `envelopes_signature_uniq` ON `envelopes` (`signature`);

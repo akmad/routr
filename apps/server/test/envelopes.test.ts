@@ -196,6 +196,20 @@ describe('submitEnvelope', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('recipient_not_found');
   });
+
+  it('rejects a byte-identical replay (UNIQUE signature)', () => {
+    const env = makeEnvelope(
+      senderIdentity,
+      senderDeviceId,
+      recipientDeviceId,
+      recipientIdentity.kex.publicKey,
+    );
+    const first = submitEnvelope(db, env);
+    expect(first.ok).toBe(true);
+    const replay = submitEnvelope(db, env);
+    expect(replay.ok).toBe(false);
+    if (!replay.ok) expect(replay.reason).toBe('duplicate');
+  });
 });
 
 describe('ackEnvelope', () => {

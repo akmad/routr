@@ -19,7 +19,8 @@ export function envelopesRoute(registry: ConnectionRegistry) {
 
     const result = submitEnvelope(c.get('db'), env);
     if (!result.ok) {
-      const status = result.reason === 'unknown_sender' ? 404 : 400;
+      const status =
+        result.reason === 'unknown_sender' ? 404 : result.reason === 'duplicate' ? 409 : 400;
       return c.json({ error: result.reason }, status);
     }
 

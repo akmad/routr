@@ -14,7 +14,8 @@ export type SubmitResult =
         | 'bad_signature'
         | 'recipient_not_found'
         | 'mismatched_wrapped_keys'
-        | 'expired';
+        | 'expired'
+        | 'duplicate';
     };
 
 export type InboxItem = {
@@ -69,29 +70,38 @@ export function submitEnvelope(db: Db, env: Envelope): SubmitResult {
   }
 
   const id = newId();
-  db.transaction((tx) => {
-    tx.insert(envelopes)
-      .values({
-        id,
-        fromDevice: env.from,
-        expiresAt: new Date(env.expiresAt),
-        kind: env.kind,
-        size: env.size,
-        ciphertext: env.ciphertext,
-        senderEphemeralPub: env.senderEphemeralPub,
-        signature: env.signature,
-      })
-      .run();
-    for (const deviceId of env.to) {
-      tx.insert(recipients)
+  try {
+    db.transaction((tx) => {
+      tx.insert(envelopes)
         .values({
-          envelopeId: id,
-          deviceId,
-          wrappedKey: env.wrappedKeys[deviceId] ?? '',
+          id,
+          fromDevice: env.from,
+          expiresAt: new Date(env.expiresAt),
+          kind: env.kind,
+          size: env.size,
+          ciphertext: env.ciphertext,
+          senderEphemeralPub: env.senderEphemeralPub,
+          signature: env.signature,
         })
         .run();
+      for (const deviceId of env.to) {
+        tx.insert(recipients)
+          .values({
+            envelopeId: id,
+            deviceId,
+            wrappedKey: env.wrappedKeys[deviceId] ?? '',
+          })
+          .run();
+      }
+    });
+  } catch (err) {
+    // The signature column has a UNIQUE index — duplicate replays hit it.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('UNIQUE') && msg.includes('signature')) {
+      return { ok: false, reason: 'duplicate' };
     }
-  });
+    throw err;
+  }
 
   return { ok: true, id, deliveredToOnline: [] };
 }

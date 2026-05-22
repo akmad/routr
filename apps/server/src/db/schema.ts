@@ -69,23 +69,33 @@ export const deviceTrusts = sqliteTable(
  * deletes it. The ciphertext + wrapped keys are stored as-is; the server
  * never decrypts.
  */
-export const envelopes = sqliteTable('envelopes', {
-  id: text('id').primaryKey(),
-  fromDevice: text('from_device')
-    .notNull()
-    .references(() => devices.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-  kind: text('kind', { enum: ['url', 'file', 'control'] }).notNull(),
-  size: integer('size').notNull(),
-  /** base64url, inline ciphertext for url/control. For file, encodes a manifest. */
-  ciphertext: text('ciphertext').notNull(),
-  senderEphemeralPub: text('sender_ephemeral_pub').notNull(),
-  /** Sender's Ed25519 signature over the canonical envelope form. */
-  signature: text('signature').notNull(),
-});
+export const envelopes = sqliteTable(
+  'envelopes',
+  {
+    id: text('id').primaryKey(),
+    fromDevice: text('from_device')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    kind: text('kind', { enum: ['url', 'file', 'control'] }).notNull(),
+    size: integer('size').notNull(),
+    /** base64url, inline ciphertext for url/control. For file, encodes a manifest. */
+    ciphertext: text('ciphertext').notNull(),
+    senderEphemeralPub: text('sender_ephemeral_pub').notNull(),
+    /**
+     * Sender's Ed25519 signature over the canonical envelope form. Unique
+     * across the table — prevents byte-identical replay attacks where an
+     * attacker captures a valid envelope and re-POSTs it.
+     */
+    signature: text('signature').notNull(),
+  },
+  (t) => ({
+    signatureIdx: uniqueIndex('envelopes_signature_uniq').on(t.signature),
+  }),
+);
 
 /**
  * Per-recipient row: the wrapped symmetric key for that recipient plus an
