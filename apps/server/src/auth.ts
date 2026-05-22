@@ -86,12 +86,6 @@ async function authenticate(
     return { ok: false, reason: 'clock_skew' };
   }
 
-  // Replay defense: reject if we've already seen this exact (deviceId, ts).
-  // This closes the 5-min replay window documented as L2 in M4.3.
-  if (nonceStore?.recordOrReject(deviceId, tsMs)) {
-    return { ok: false, reason: 'replay' };
-  }
-
   const db = c.get('db');
   const device = getDeviceById(db, deviceId);
   if (!device) return { ok: false, reason: 'unknown_device' };
@@ -106,6 +100,15 @@ async function authenticate(
   const pubBytes = b64uToBytes(device.signPub);
   if (!verify(pubBytes, sigBytes, message)) {
     return { ok: false, reason: 'bad_signature' };
+  }
+
+  // Replay defense: reject if we've already seen this exact (deviceId, ts).
+  // This MUST run after signature verification — otherwise an attacker who
+  // knows a victim's deviceId could pre-poison timestamps with garbage
+  // signatures, locking the victim out of legitimate requests at those
+  // timestamps within the 5-min clock-skew window.
+  if (nonceStore?.recordOrReject(deviceId, tsMs)) {
+    return { ok: false, reason: 'replay' };
   }
 
   touchLastSeen(db, device.id);

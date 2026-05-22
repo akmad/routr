@@ -167,6 +167,36 @@ describe('GET /api/v1/devices/:id', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('regression: bad-signature attempts do NOT consume the replay-defense nonce', async () => {
+    const { app } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    const path = `/api/v1/devices/${deviceId}`;
+    const ts = String(Date.now());
+
+    // Attacker sends a garbage signature for (deviceId, ts).
+    const attackerRes = await app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(new Uint8Array(64))}"`,
+      },
+    });
+    expect(attackerRes.status).toBe(401);
+    expect(((await attackerRes.json()) as { error: string }).error).toBe('bad_signature');
+
+    // Victim's legitimate request at the same timestamp must NOT be rejected
+    // as 'replay' — the nonce must only be consumed on verified signatures.
+    const sigInput = buildSignedRequestString('GET', path, ts, new Uint8Array(0));
+    const sigBytes = sign(me.id.sign.secretKey, new TextEncoder().encode(sigInput));
+    const victimRes = await app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+    expect(victimRes.status).toBe(200);
+  });
 });
 
 describe('POST /api/v1/invites + signed-request auth', () => {
