@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
+import { NonceStore } from './nonce-store.js';
 import { blobsRoute } from './routes/blobs.js';
 import { devicesRoute } from './routes/devices.js';
 import { envelopesRoute } from './routes/envelopes.js';
@@ -16,6 +17,7 @@ export type AppEnv = {
     log: Logger;
     deviceId: string;
     userId: string;
+    nonceStore: NonceStore;
   };
 };
 
@@ -34,11 +36,13 @@ export type AppDeps = {
  */
 export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: ConnectionRegistry } {
   const registry = deps.registry ?? new ConnectionRegistry();
+  const nonceStore = new NonceStore(5 * 60 * 1000); // 5-min replay window
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
     c.set('db', deps.db);
     c.set('log', deps.log);
+    c.set('nonceStore', nonceStore);
     await next();
   });
 

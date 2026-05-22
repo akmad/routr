@@ -1,4 +1,4 @@
-import { bytesToB64u, generateIdentity } from '@routr/crypto';
+import { bytesToB64u, fingerprint, generateIdentity } from '@routr/crypto';
 import { type FormEvent, useEffect, useState } from 'react';
 import { registerDevice, signedFetch } from '../../lib/api.js';
 import {
@@ -8,7 +8,7 @@ import {
   saveIdentity,
 } from '../../lib/keystore.js';
 
-type Device = { id: string; name: string; kexPub: string };
+type Device = { id: string; name: string; kexPub: string; signPub: string };
 
 type Status = 'loading' | 'setup' | 'ready';
 
@@ -200,6 +200,14 @@ function ReadyPanel({
     }
   }
 
+  const [showFingerprints, setShowFingerprints] = useState(false);
+  let ownFp = '—';
+  try {
+    ownFp = fingerprint(identity.signPublicKey, identity.kexPublicKey);
+  } catch {
+    // Malformed identity — show placeholder.
+  }
+
   return (
     <div className="w-72 p-4">
       <div className="flex items-center justify-between mb-3">
@@ -238,7 +246,55 @@ function ReadyPanel({
         </div>
       )}
 
-      <button type="button" onClick={onForget} className="text-xs text-gray-400 hover:text-red-500">
+      <div className="border-t pt-2 mt-2">
+        <button
+          type="button"
+          onClick={() => setShowFingerprints((v) => !v)}
+          className="text-xs text-gray-500 hover:text-indigo-600"
+        >
+          {showFingerprints ? '▼' : '▶'} Fingerprints
+        </button>
+        {showFingerprints && (
+          <div className="mt-2 space-y-2">
+            <div>
+              <p className="text-xs text-gray-400">This device</p>
+              <p className="text-xs font-mono select-all">{ownFp}</p>
+            </div>
+            {devices.map((d) => {
+              let fp = '—';
+              try {
+                const sb = Uint8Array.from(
+                  atob(
+                    `${d.signPub.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat((4 - (d.signPub.length % 4)) % 4)}`,
+                  ),
+                  (c) => c.charCodeAt(0),
+                );
+                const kb = Uint8Array.from(
+                  atob(
+                    `${d.kexPub.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat((4 - (d.kexPub.length % 4)) % 4)}`,
+                  ),
+                  (c) => c.charCodeAt(0),
+                );
+                fp = fingerprint(sb, kb);
+              } catch {
+                // ignore
+              }
+              return (
+                <div key={d.id}>
+                  <p className="text-xs text-gray-400">{d.name}</p>
+                  <p className="text-xs font-mono select-all">{fp}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onForget}
+        className="text-xs text-gray-400 hover:text-red-500 mt-3"
+      >
         Forget this device
       </button>
     </div>

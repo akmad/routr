@@ -75,24 +75,21 @@ Mitigation later: Double Ratchet or one-time prekeys. For v1 we accept
 this in exchange for protocol simplicity — same trade-off as Signal's
 "sealed sender" without the X3DH layer.
 
-### L2: Replay window on signed REST requests
+### L2: Replay window on signed REST requests — FIXED
 
-`auth.ts` accepts a signed request if `|now - timestamp| <= 5 min` and
+~~`auth.ts` accepts a signed request if `|now - timestamp| <= 5 min` and
 the Ed25519 signature is valid. There is no per-request nonce stored
-server-side. An attacker who captures a signed request can replay it
-within that 5-minute window.
+server-side.~~
 
-Impact assessment:
-- `POST /api/v1/invites` — a replay creates a duplicate invite. Single-use
-  on redeem, but accumulates unused tokens.
-- `POST /api/v1/envelopes/:id/ack` — idempotent (subsequent acks are
-  silently no-ops). Safe to replay.
-- `POST /api/v1/blobs` — uploads a duplicate blob with a new ID. Bounded
-  by per-device storage; replay is annoying, not catastrophic.
+**Resolved**: `apps/server/src/nonce-store.ts` tracks
+`(deviceId, timestamp)` pairs in-process for the duration of the clock-
+skew window. `requireDeviceAuth` checks the store and rejects duplicates
+with `{ok: false, reason: 'replay'}` (HTTP 401). The store auto-evicts
+entries past the TTL on each insert.
 
-Mitigation later: server tracks `(deviceId, timestamp)` tuples in a
-short-TTL nonce store. Not implemented in v1 because the impact is
-bounded and the operational cost is non-trivial.
+Limitation: single-process only. A fleet deployment needs a shared
+store (redis SETEX, postgres on-conflict). That's tracked in the
+parking lot.
 
 ### L3: Envelope replay (different concern from L2) — FIXED
 
@@ -168,8 +165,8 @@ channel.
 
 1. Wire **fingerprint verification** into the device pairing flow
    (show short fingerprint + QR for out-of-band confirm).
-2. Add a **nonce store** for signed-request replay defense once we have
-   redis or a similar TTL store.
+2. ~~Add a **nonce store** for signed-request replay defense~~ — done
+   for single-process; multi-process needs redis or similar.
 3. ~~Enforce **envelope signature uniqueness** in the DB~~ — done.
 4. Add **rate limiting** on `/api/v1/devices` and `/api/v1/invites` to
    prevent enumeration/abuse.

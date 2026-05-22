@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { b64uToBytes, verify } from '@routr/crypto';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv } from './app.js';
+import type { NonceStore } from './nonce-store.js';
 import { getDeviceById } from './services/devices.js';
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
@@ -43,8 +44,20 @@ function parseAuthHeader(header: string | undefined): Record<string, string> | n
   return parts;
 }
 
+/**
+ * Routes pick up the auth middleware via context: createApp() builds a
+ * NonceStore and binds it under `c.var.auth` so this middleware can use
+ * it. Replay state is then scoped to one createApp() invocation — tests
+ * get a fresh store; production gets one per server.
+ */
 export const requireDeviceAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const result = await authenticate(c);
+  const store = c.get('nonceStore');
+  if (!store) {
+    // Defensive: if createApp didn't seed a store, fall back to a per-
+    // request store (allows zero replay defense but doesn't 500).
+    c.get('log')?.warn?.('no nonce store on context — falling back');
+  }
+  const result = await authenticate(c, store);
   if (!result.ok) {
     return c.json({ error: result.reason }, 401);
   }
@@ -55,7 +68,10 @@ export const requireDeviceAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
 
 type AuthResult = { ok: true; deviceId: string; userId: string } | { ok: false; reason: string };
 
-async function authenticate(c: Context<AppEnv>): Promise<AuthResult> {
+async function authenticate(
+  c: Context<AppEnv>,
+  nonceStore: NonceStore | undefined,
+): Promise<AuthResult> {
   const parsed = parseAuthHeader(c.req.header('authorization'));
   if (!parsed) return { ok: false, reason: 'missing_auth' };
 
@@ -68,6 +84,12 @@ async function authenticate(c: Context<AppEnv>): Promise<AuthResult> {
   if (!Number.isFinite(tsMs)) return { ok: false, reason: 'bad_timestamp' };
   if (Math.abs(Date.now() - tsMs) > MAX_CLOCK_SKEW_MS) {
     return { ok: false, reason: 'clock_skew' };
+  }
+
+  // Replay defense: reject if we've already seen this exact (deviceId, ts).
+  // This closes the 5-min replay window documented as L2 in M4.3.
+  if (nonceStore?.recordOrReject(deviceId, tsMs)) {
+    return { ok: false, reason: 'replay' };
   }
 
   const db = c.get('db');

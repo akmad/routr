@@ -162,4 +162,35 @@ describe('POST /api/v1/invites + signed-request auth', () => {
     expect(res.status).toBe(401);
     expect(((await res.json()) as { error: string }).error).toBe('bad_signature');
   });
+
+  it('rejects a replayed signed request with reason: replay', async () => {
+    const { app } = makeTestApp();
+    const first = fakeIdentityRequest('first');
+    const reg = await postJson(app, '/api/v1/devices', first.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    const body = JSON.stringify({ scope: 'signup', ttl: 3600 });
+    const timestamp = String(Date.now());
+    const bodyBytes = new TextEncoder().encode(body);
+    const sigMessage = buildSignedRequestString('POST', '/api/v1/invites', timestamp, bodyBytes);
+    const sigBytes = sign(first.id.sign.secretKey, new TextEncoder().encode(sigMessage));
+    const authHeader = `Beam-Sig deviceId="${deviceId}", timestamp="${timestamp}", signature="${bytesToB64u(sigBytes)}"`;
+
+    // First request: should succeed.
+    const ok = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: authHeader },
+      body,
+    });
+    expect(ok.status).toBe(201);
+
+    // Same signed request, replayed: should 401 with reason 'replay'.
+    const replay = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: authHeader },
+      body,
+    });
+    expect(replay.status).toBe(401);
+    expect(((await replay.json()) as { error: string }).error).toBe('replay');
+  });
 });
