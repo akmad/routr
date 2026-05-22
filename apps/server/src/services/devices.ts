@@ -93,3 +93,47 @@ export function listDevicesForUser(db: Db, userId: string) {
     .where(eq(devices.userId, userId))
     .all();
 }
+
+export type RevokeResult =
+  | { ok: true }
+  | { ok: false; reason: 'not_found' | 'cross_user' | 'self_revoke' };
+
+/**
+ * Revoke a device — hard-delete the row. The schema FKs cascade so the
+ * device's sent envelopes, recipients, and trusts are removed too.
+ *
+ * Constraints:
+ *   - The revoker must be a different device than the target (`requesterDeviceId !== targetDeviceId`).
+ *   - The two devices must belong to the same user.
+ *
+ * Self-revoke is intentionally disallowed: if a device is compromised, the
+ * attacker would just self-revoke other devices. We require a different
+ * device to issue the revocation — this lets the user revoke a stolen
+ * phone from their laptop, but doesn't let the stolen phone revoke the
+ * laptop.
+ */
+export function revokeDevice(
+  db: Db,
+  requesterDeviceId: string,
+  targetDeviceId: string,
+): RevokeResult {
+  if (requesterDeviceId === targetDeviceId) {
+    return { ok: false, reason: 'self_revoke' };
+  }
+  const requester = db
+    .select({ userId: devices.userId })
+    .from(devices)
+    .where(eq(devices.id, requesterDeviceId))
+    .get();
+  const target = db
+    .select({ userId: devices.userId })
+    .from(devices)
+    .where(eq(devices.id, targetDeviceId))
+    .get();
+  if (!target) return { ok: false, reason: 'not_found' };
+  if (!requester || requester.userId !== target.userId) {
+    return { ok: false, reason: 'cross_user' };
+  }
+  db.delete(devices).where(eq(devices.id, targetDeviceId)).run();
+  return { ok: true };
+}

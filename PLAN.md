@@ -68,15 +68,26 @@ _(empty — see Parking lot for next priorities)_
 - Hosted demo instance
 
 ### Security follow-ups from M4.3 review
-- Device key fingerprint UI for out-of-band pairing verification
-- Server-side nonce store to close the 5-min signed-request replay window
-- Unique index on `envelopes.signature` for sender-side replay defense
-- Rate limiting on `/api/v1/devices` and `/api/v1/invites`
-- Device revocation channel (signed "I no longer trust device X" message)
-- Forward secrecy via Double Ratchet or one-time prekeys
+- ✅ Device key fingerprint UI (web + extension)
+- ✅ Server-side nonce store to close the 5-min signed-request replay window
+- ✅ Unique index on `envelopes.signature` for sender-side replay defense
+- ✅ Rate limiting on `/api/v1/devices` and `/api/v1/envelopes`
+- ✅ Device revocation: `DELETE /api/v1/devices/:id` (different-device only)
+- Forward secrecy via Double Ratchet or one-time prekeys (deferred)
+- Multi-process nonce store (redis/postgres) — only relevant past single-host
 
 ## Done
 
+- **Device revocation**: `DELETE /api/v1/devices/:id` signed by a different
+  device of the same user. Hard-deletes; FKs cascade so the revoked device's
+  envelopes/recipients go away. Self-revoke and cross-user revoke rejected.
+  Web UI: "Revoke" button next to each non-self device. 3 endpoint tests.
+- **Expired-envelope cleanup**: 5-min setInterval in main.ts deletes
+  envelopes past their expiresAt. Prevents unbounded table growth when a
+  recipient never comes back to ack. 2 service tests.
+- **Signed-request replay defense (L2)**: in-process NonceStore keyed by
+  `(deviceId, timestamp)`, TTL = clock-skew window. Rejects replays with
+  401 reason 'replay'. 5 store tests + 1 integration test.
 - **Routing rules (client-side)**: `/rules` page in web app with 5 pattern
   types (url_contains, url_regex, mime_prefix, file_ext, kind). IndexedDB
   storage, send-page auto-suggest. 11 matcher tests in vitest. The product

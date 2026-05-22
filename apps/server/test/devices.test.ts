@@ -194,3 +194,132 @@ describe('POST /api/v1/invites + signed-request auth', () => {
     expect(((await replay.json()) as { error: string }).error).toBe('replay');
   });
 });
+
+describe('DELETE /api/v1/devices/:id (revoke)', () => {
+  async function signedDelete(
+    app: TestApp,
+    revokerIdentity: ReturnType<typeof fakeIdentityRequest>['id'],
+    revokerDeviceId: string,
+    targetDeviceId: string,
+  ) {
+    const path = `/api/v1/devices/${targetDeviceId}`;
+    const ts = String(Date.now());
+    const sigMessage = buildSignedRequestString('DELETE', path, ts, new Uint8Array(0));
+    const sigBytes = sign(revokerIdentity.sign.secretKey, new TextEncoder().encode(sigMessage));
+    return app.request(path, {
+      method: 'DELETE',
+      headers: {
+        authorization: `Beam-Sig deviceId="${revokerDeviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+  }
+
+  it('a device of the same user can revoke another device', async () => {
+    const { app } = makeTestApp();
+    // Device 1: bootstrap.
+    const dev1 = fakeIdentityRequest('dev1');
+    const reg1 = await postJson(app, '/api/v1/devices', dev1.body);
+    const { deviceId: devId1 } = (await reg1.json()) as { deviceId: string };
+
+    // Device 1 issues a pair_device invite for itself.
+    const body = JSON.stringify({ scope: 'pair_device', ttl: 3600 });
+    const ts1 = String(Date.now());
+    const sigMessage = buildSignedRequestString(
+      'POST',
+      '/api/v1/invites',
+      ts1,
+      new TextEncoder().encode(body),
+    );
+    const sigBytes = sign(dev1.id.sign.secretKey, new TextEncoder().encode(sigMessage));
+    const inviteRes = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${devId1}", timestamp="${ts1}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+      body,
+    });
+    const { token } = (await inviteRes.json()) as { token: string };
+
+    // Device 2 joins via the invite.
+    const dev2 = fakeIdentityRequest('dev2');
+    const reg2 = await postJson(app, '/api/v1/devices', { ...dev2.body, invite: token });
+    const { deviceId: devId2 } = (await reg2.json()) as { deviceId: string };
+
+    // Device 1 revokes device 2.
+    const res = await signedDelete(app, dev1.id, devId1, devId2);
+    expect(res.status).toBe(200);
+
+    // Device 2 can no longer authenticate.
+    const body2 = JSON.stringify({ scope: 'pair_device', ttl: 3600 });
+    const ts2 = String(Date.now() + 1); // distinct timestamp to avoid replay
+    const sigMessage2 = buildSignedRequestString(
+      'POST',
+      '/api/v1/invites',
+      ts2,
+      new TextEncoder().encode(body2),
+    );
+    const sigBytes2 = sign(dev2.id.sign.secretKey, new TextEncoder().encode(sigMessage2));
+    const stale = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${devId2}", timestamp="${ts2}", signature="${bytesToB64u(sigBytes2)}"`,
+      },
+      body: body2,
+    });
+    expect(stale.status).toBe(401);
+    expect(((await stale.json()) as { error: string }).error).toBe('unknown_device');
+  });
+
+  it('refuses self-revoke', async () => {
+    const { app } = makeTestApp();
+    const dev1 = fakeIdentityRequest('dev1');
+    const reg1 = await postJson(app, '/api/v1/devices', dev1.body);
+    const { deviceId: devId1 } = (await reg1.json()) as { deviceId: string };
+
+    const res = await signedDelete(app, dev1.id, devId1, devId1);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('self_revoke');
+  });
+
+  it('refuses cross-user revoke', async () => {
+    const { app } = makeTestApp();
+    // Two completely separate users (each is a fresh bootstrap on a fresh app
+    // ... but we can't bootstrap twice on the same server, so we go through
+    // invite + register as a new user).
+    const dev1 = fakeIdentityRequest('dev1');
+    const reg1 = await postJson(app, '/api/v1/devices', dev1.body);
+    const { deviceId: devId1 } = (await reg1.json()) as { deviceId: string };
+
+    // dev1 issues a SIGNUP invite (new user).
+    const inviteBody = JSON.stringify({ scope: 'signup', ttl: 3600 });
+    const ts = String(Date.now());
+    const sigMessage = buildSignedRequestString(
+      'POST',
+      '/api/v1/invites',
+      ts,
+      new TextEncoder().encode(inviteBody),
+    );
+    const sigBytes = sign(dev1.id.sign.secretKey, new TextEncoder().encode(sigMessage));
+    const inviteRes = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${devId1}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+      body: inviteBody,
+    });
+    const { token } = (await inviteRes.json()) as { token: string };
+
+    // dev2 is a new user.
+    const dev2 = fakeIdentityRequest('dev2');
+    const reg2 = await postJson(app, '/api/v1/devices', { ...dev2.body, invite: token });
+    const { deviceId: devId2 } = (await reg2.json()) as { deviceId: string };
+
+    // dev1 (user A) tries to revoke dev2 (user B). Should be forbidden.
+    const res = await signedDelete(app, dev1.id, devId1, devId2);
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toBe('cross_user');
+  });
+});

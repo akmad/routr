@@ -522,6 +522,17 @@ function DevicesPage() {
     }
   }
 
+  async function revoke(deviceId: string, deviceName: string) {
+    if (!confirm(`Revoke "${deviceName}"? It will lose access immediately.`)) return;
+    const res = await signedFetch(identity, `/api/v1/devices/${deviceId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDevList((prev) => prev.filter((d) => d.id !== deviceId));
+    } else {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(`Revoke failed: ${body.error ?? res.status}`);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Devices</h1>
@@ -537,21 +548,33 @@ function DevicesPage() {
           } catch {
             // Malformed key bytes — show placeholder.
           }
+          const isSelf = d.id === identity.deviceId;
           return (
             <li
               key={d.id}
-              className={`bg-white border rounded-lg px-4 py-3 ${d.id === identity.deviceId ? 'border-indigo-300' : 'border-gray-200'}`}
+              className={`bg-white border rounded-lg px-4 py-3 ${isSelf ? 'border-indigo-300' : 'border-gray-200'}`}
             >
-              <p className="text-sm font-medium">
-                {d.name}{' '}
-                {d.id === identity.deviceId && (
-                  <span className="text-xs text-indigo-500 ml-1">(this device)</span>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm font-medium">
+                    {d.name}{' '}
+                    {isSelf && <span className="text-xs text-indigo-500 ml-1">(this device)</span>}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {d.platform} &middot; {d.id.slice(0, 8)}…
+                  </p>
+                  <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
+                </div>
+                {!isSelf && (
+                  <button
+                    type="button"
+                    onClick={() => void revoke(d.id, d.name)}
+                    className="text-xs text-red-500 hover:underline shrink-0 ml-2"
+                  >
+                    Revoke
+                  </button>
                 )}
-              </p>
-              <p className="text-xs text-gray-400">
-                {d.platform} &middot; {d.id.slice(0, 8)}…
-              </p>
-              <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
+              </div>
             </li>
           );
         })}

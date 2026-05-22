@@ -3,7 +3,12 @@ import { Hono } from 'hono';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.js';
 import { requireDeviceAuth } from '../auth.js';
-import { getDeviceById, listDevicesForUser, registerDevice } from '../services/devices.js';
+import {
+  getDeviceById,
+  listDevicesForUser,
+  registerDevice,
+  revokeDevice,
+} from '../services/devices.js';
 
 export const devicesRoute = new Hono<AppEnv>();
 
@@ -41,6 +46,18 @@ devicesRoute.get('/', requireDeviceAuth, (c) => {
       signPub: d.signPub,
     })),
   );
+});
+
+devicesRoute.delete('/:id', requireDeviceAuth, (c) => {
+  const requesterId = c.get('deviceId');
+  const targetId = c.req.param('id');
+  const result = revokeDevice(c.get('db'), requesterId, targetId);
+  if (!result.ok) {
+    const status =
+      result.reason === 'not_found' ? 404 : result.reason === 'self_revoke' ? 400 : 403;
+    return c.json({ error: result.reason }, status);
+  }
+  return c.json({ ok: true });
 });
 
 devicesRoute.get('/:id', (c) => {
