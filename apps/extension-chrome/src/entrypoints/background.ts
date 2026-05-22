@@ -74,12 +74,8 @@ export default defineBackground(() => {
     const wsUrl = `${identity.serverUrl.replace(/^http/, 'ws')}/api/v1/ws`;
     ws = new WebSocket(wsUrl);
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data as string) as {
-        type: string;
-        nonce?: string;
-        envelope?: InboxMessage;
-      };
-      if (msg.type === 'challenge' && msg.nonce) {
+      const msg = JSON.parse(e.data as string) as Record<string, unknown> & { type: string };
+      if (msg.type === 'challenge' && typeof msg.nonce === 'string') {
         const sigBytes = sign(
           identity.signSecretKey,
           new TextEncoder().encode(`routr.ws.auth.v1\n${identity.deviceId}\n${msg.nonce}\n`),
@@ -91,8 +87,9 @@ export default defineBackground(() => {
             signature: bytesToB64u(sigBytes),
           }),
         );
-      } else if (msg.type === 'inbox_envelope' && msg.envelope) {
-        void handleEnvelope(msg.envelope, identity);
+      } else if (msg.type === 'envelope') {
+        const { type: _t, ...rest } = msg;
+        void handleEnvelope(rest as unknown as InboxMessage, identity);
       }
     };
     ws.onclose = (ev) => {

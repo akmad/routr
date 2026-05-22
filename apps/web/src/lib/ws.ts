@@ -14,10 +14,11 @@ export type InboxMessage = {
   size: number;
 };
 
+type EnvelopeMsg = InboxMessage & { type: 'envelope' };
 type ServerMsg =
   | { type: 'challenge'; nonce: string }
   | { type: 'authenticated' }
-  | { type: 'inbox_envelope'; envelope: InboxMessage }
+  | EnvelopeMsg
   | { type: 'pong' };
 
 /**
@@ -60,8 +61,11 @@ export class BeamSocket {
         // Successful round-trip — reset backoff.
         this.reconnectDelayMs = 1000;
         this.onConnected?.();
-      } else if (msg.type === 'inbox_envelope') {
-        this.onEnvelope?.(msg.envelope);
+      } else if (msg.type === 'envelope') {
+        // Server sends a flat envelope shape — strip `type` before handing
+        // it to consumers.
+        const { type: _t, ...rest } = msg;
+        this.onEnvelope?.(rest as InboxMessage);
       }
     };
     this.ws.onclose = (ev) => {
