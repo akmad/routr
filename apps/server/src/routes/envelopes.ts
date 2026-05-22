@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.js';
 import { requireDeviceAuth } from '../auth.js';
-import { ackEnvelope, submitEnvelope } from '../services/envelopes.js';
+import { ackEnvelope, ackEnvelopesBulk, submitEnvelope } from '../services/envelopes.js';
 import type { ConnectionRegistry } from '../ws/registry.js';
 
 export function envelopesRoute(registry: ConnectionRegistry) {
@@ -54,6 +54,23 @@ export function envelopesRoute(registry: ConnectionRegistry) {
       return c.json({ error: result.reason }, 404);
     }
     return c.json({ ok: true, deleted: result.deleted });
+  });
+
+  route.post('/ack-batch', requireDeviceAuth, async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      !Array.isArray((raw as { ids?: unknown }).ids) ||
+      ((raw as { ids: unknown[] }).ids as unknown[]).some((x) => typeof x !== 'string')
+    ) {
+      return c.json({ error: 'invalid_body' }, 400);
+    }
+    const ids = (raw as { ids: string[] }).ids;
+    // Bound the batch to keep a single transaction sane.
+    if (ids.length > 500) return c.json({ error: 'too_many', max: 500 }, 400);
+    const result = ackEnvelopesBulk(c.get('db'), ids, c.get('deviceId'));
+    return c.json({ ok: true, ...result });
   });
 
   return route;

@@ -188,6 +188,47 @@ export function ackEnvelope(db: Db, envelopeId: string, deviceId: string): AckRe
   });
 }
 
+/**
+ * Bulk-ack: ack many envelopes for a single device in one transaction.
+ * Returns counts of acked + cascade-deleted envelopes. Idempotent — missing
+ * or already-acked rows are silently skipped.
+ */
+export function ackEnvelopesBulk(
+  db: Db,
+  envelopeIds: string[],
+  deviceId: string,
+): { acked: number; deletedEnvelopes: number } {
+  if (envelopeIds.length === 0) return { acked: 0, deletedEnvelopes: 0 };
+  let acked = 0;
+  let deletedEnvelopes = 0;
+  db.transaction((tx) => {
+    for (const id of envelopeIds) {
+      const r = tx
+        .update(recipients)
+        .set({ ackedAt: new Date() })
+        .where(
+          and(
+            eq(recipients.envelopeId, id),
+            eq(recipients.deviceId, deviceId),
+            isNull(recipients.ackedAt),
+          ),
+        )
+        .run();
+      if (r.changes > 0) acked++;
+      const unacked = tx
+        .select({ n: sql<number>`count(*)` })
+        .from(recipients)
+        .where(and(eq(recipients.envelopeId, id), isNull(recipients.ackedAt)))
+        .get();
+      if ((unacked?.n ?? 0) === 0) {
+        const del = tx.delete(envelopes).where(eq(envelopes.id, id)).run();
+        if (del.changes > 0) deletedEnvelopes++;
+      }
+    }
+  });
+  return { acked, deletedEnvelopes };
+}
+
 /** Count of envelopes still pending for this device. For tests / metrics. */
 export function pendingCountFor(db: Db, deviceId: string): number {
   const row = db

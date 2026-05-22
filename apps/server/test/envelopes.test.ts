@@ -21,6 +21,7 @@ import { createLogger } from '../src/logger.js';
 import { registerDevice } from '../src/services/devices.js';
 import {
   ackEnvelope,
+  ackEnvelopesBulk,
   cleanupExpiredEnvelopes,
   envelopeExists,
   listPendingFor,
@@ -354,6 +355,41 @@ describe('ackEnvelope', () => {
     // After cascade-delete both envelope and recipient rows are gone.
     const second = ackEnvelope(db, submit.id, recipientDeviceId);
     expect(second).toEqual({ ok: false, reason: 'not_found' });
+  });
+
+  it('ackEnvelopesBulk acks many in one transaction', () => {
+    const env1 = makeEnvelope(
+      senderIdentity,
+      senderDeviceId,
+      recipientDeviceId,
+      recipientIdentity.kex.publicKey,
+    );
+    const env2 = makeEnvelope(
+      senderIdentity,
+      senderDeviceId,
+      recipientDeviceId,
+      recipientIdentity.kex.publicKey,
+    );
+    const s1 = submitEnvelope(db, env1);
+    const s2 = submitEnvelope(db, env2);
+    if (!s1.ok || !s2.ok) throw new Error('submit');
+
+    expect(pendingCountFor(db, recipientDeviceId)).toBe(2);
+    const result = ackEnvelopesBulk(db, [s1.id, s2.id], recipientDeviceId);
+    expect(result.acked).toBe(2);
+    expect(result.deletedEnvelopes).toBe(2);
+    expect(pendingCountFor(db, recipientDeviceId)).toBe(0);
+  });
+
+  it('ackEnvelopesBulk silently skips unknown ids', () => {
+    const result = ackEnvelopesBulk(db, [newId(), newId()], recipientDeviceId);
+    expect(result.acked).toBe(0);
+    expect(result.deletedEnvelopes).toBe(0);
+  });
+
+  it('ackEnvelopesBulk handles empty input', () => {
+    const result = ackEnvelopesBulk(db, [], recipientDeviceId);
+    expect(result).toEqual({ acked: 0, deletedEnvelopes: 0 });
   });
 });
 

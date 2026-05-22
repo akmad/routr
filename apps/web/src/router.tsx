@@ -347,10 +347,11 @@ function InboxPage() {
       return;
     const ids = items.map((it) => it.id);
     setItems([]);
-    // Sequential acks — server's ack endpoint is cheap and idempotent.
-    for (const id of ids) {
-      await signedFetch(identity, `/api/v1/envelopes/${id}/ack`, { method: 'POST', body: '{}' });
-    }
+    // One round-trip via the bulk-ack endpoint.
+    await signedFetch(identity, '/api/v1/envelopes/ack-batch', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
   }
 
   return (
