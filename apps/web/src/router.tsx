@@ -301,21 +301,32 @@ function InboxPage() {
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const socketRef = useRef<BeamSocket | null>(null);
 
+  const refreshDeviceNames = async () => {
+    try {
+      const r = await signedFetch(identity, '/api/v1/devices', { method: 'GET' });
+      const list = (await r.json()) as Array<{ id: string; name: string }>;
+      const map: Record<string, string> = {};
+      for (const d of list) map[d.id] = d.name;
+      setDeviceNames(map);
+    } catch {
+      // ignore
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshDeviceNames is stable
   useEffect(() => {
-    void signedFetch(identity, '/api/v1/devices', { method: 'GET' })
-      .then((r) => r.json())
-      .then((list) => {
-        const map: Record<string, string> = {};
-        for (const d of list as Array<{ id: string; name: string }>) map[d.id] = d.name;
-        setDeviceNames(map);
-      })
-      .catch(() => {});
+    void refreshDeviceNames();
   }, [identity]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshDeviceNames is stable
   useEffect(() => {
     const sock = new BeamSocket(identity);
     socketRef.current = sock;
-    sock.onConnected = () => setConnected(true);
+    sock.onConnected = () => {
+      setConnected(true);
+      // Refresh on each successful (re)auth — picks up newly-paired devices.
+      void refreshDeviceNames();
+    };
     sock.onDisconnected = () => setConnected(false);
     sock.onRevoked = () => void handleRevoked();
     sock.onEnvelope = (env) => {
