@@ -8,6 +8,13 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Live online indicator on the Devices page**: `GET /api/v1/devices`
+  and `GET /api/v1/devices/:id` now include `online: boolean`, derived
+  from the in-process WS `ConnectionRegistry`. The web app shows a
+  small green dot next to devices currently holding an open WebSocket
+  and switches the subtitle from "seen Xm ago" to "online now" while
+  the device is connected. No new round trips — it rides the existing
+  devices fetch.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

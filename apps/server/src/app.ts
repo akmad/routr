@@ -72,7 +72,7 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
     );
   }
 
-  app.route('/api/v1/devices', devicesRoute);
+  app.route('/api/v1/devices', devicesRoute(registry));
   app.route('/api/v1/invites', invitesRoute);
   app.route('/api/v1/envelopes', envelopesRoute(registry));
   app.route('/api/v1/blobs', blobsRoute(blobDir));

@@ -8,17 +8,23 @@ import { type AppEnv, createApp } from '../src/app.js';
 import { buildSignedRequestString } from '../src/auth.js';
 import { type Db, openDatabase } from '../src/db/index.js';
 import { createLogger } from '../src/logger.js';
+import { ConnectionRegistry } from '../src/ws/registry.js';
 
 const MIGRATIONS = resolve(fileURLToPath(import.meta.url), '../../drizzle');
 
 type TestApp = Hono<AppEnv>;
 
-function makeTestApp(): { app: TestApp; db: Db } {
+function makeTestApp(opts: { registry?: ConnectionRegistry } = {}): {
+  app: TestApp;
+  db: Db;
+  registry: ConnectionRegistry;
+} {
   const { db } = openDatabase(':memory:');
   migrate(db, { migrationsFolder: MIGRATIONS });
   const log = createLogger({ logLevel: 'fatal' });
-  const { app } = createApp({ db, log, disableRateLimits: true });
-  return { app, db };
+  const registry = opts.registry ?? new ConnectionRegistry();
+  const { app } = createApp({ db, log, disableRateLimits: true, registry });
+  return { app, db, registry };
 }
 
 function fakeIdentityRequest(name = 'web') {
@@ -425,5 +431,124 @@ describe('DELETE /api/v1/devices/:id (revoke)', () => {
     const res = await signedDelete(app, dev1.id, devId1, devId2);
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toBe('cross_user');
+  });
+});
+
+describe('GET /api/v1/devices — online presence', () => {
+  // The WS registry tracks live connections in-process. The devices list
+  // surfaces an `online` flag so the UI can show a green dot for devices
+  // currently holding an open WS.
+  function fakeConn(deviceId: string) {
+    return { deviceId, send: () => {}, close: () => {} };
+  }
+
+  async function signedListDevices(
+    app: TestApp,
+    identity: ReturnType<typeof fakeIdentityRequest>['id'],
+    deviceId: string,
+  ) {
+    const ts = String(Date.now());
+    const path = '/api/v1/devices';
+    const sigMessage = buildSignedRequestString('GET', path, ts, new Uint8Array(0));
+    const sigBytes = sign(identity.sign.secretKey, new TextEncoder().encode(sigMessage));
+    return app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(sigBytes)}"`,
+      },
+    });
+  }
+
+  it('reports online=false when no connection is registered', async () => {
+    const { app } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    const res = await signedListDevices(app, me.id, deviceId);
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ id: string; online: boolean }>;
+    expect(list).toHaveLength(1);
+    expect(list[0]?.online).toBe(false);
+  });
+
+  it('reports online=true once a connection is added to the registry', async () => {
+    const { app, registry } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+
+    registry.add(fakeConn(deviceId));
+
+    const res = await signedListDevices(app, me.id, deviceId);
+    const list = (await res.json()) as Array<{ id: string; online: boolean }>;
+    expect(list[0]?.online).toBe(true);
+  });
+
+  it('reports online independently per device', async () => {
+    const { app, registry } = makeTestApp();
+    // dev1 is online, dev2 is offline. Both belong to the same user.
+    const dev1 = fakeIdentityRequest('dev1');
+    const reg1 = await postJson(app, '/api/v1/devices', dev1.body);
+    const { deviceId: id1 } = (await reg1.json()) as { deviceId: string };
+
+    // dev1 mints a pair_device invite for dev2.
+    const inviteBody = JSON.stringify({ scope: 'pair_device', ttl: 3600 });
+    const ts = String(Date.now());
+    const sig = sign(
+      dev1.id.sign.secretKey,
+      new TextEncoder().encode(
+        buildSignedRequestString(
+          'POST',
+          '/api/v1/invites',
+          ts,
+          new TextEncoder().encode(inviteBody),
+        ),
+      ),
+    );
+    const inviteRes = await app.request('/api/v1/invites', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Beam-Sig deviceId="${id1}", timestamp="${ts}", signature="${bytesToB64u(sig)}"`,
+      },
+      body: inviteBody,
+    });
+    const { token } = (await inviteRes.json()) as { token: string };
+
+    const dev2 = fakeIdentityRequest('dev2');
+    const reg2 = await postJson(app, '/api/v1/devices', { ...dev2.body, invite: token });
+    const { deviceId: id2 } = (await reg2.json()) as { deviceId: string };
+
+    // Only dev1 has an open WS.
+    registry.add(fakeConn(id1));
+
+    const res = await signedListDevices(app, dev1.id, id1);
+    const list = (await res.json()) as Array<{ id: string; online: boolean }>;
+    const byId = new Map(list.map((d) => [d.id, d.online]));
+    expect(byId.get(id1)).toBe(true);
+    expect(byId.get(id2)).toBe(false);
+  });
+
+  it('exposes online on GET /api/v1/devices/:id too', async () => {
+    const { app, registry } = makeTestApp();
+    const me = fakeIdentityRequest('me');
+    const reg = await postJson(app, '/api/v1/devices', me.body);
+    const { deviceId } = (await reg.json()) as { deviceId: string };
+    registry.add(fakeConn(deviceId));
+
+    const ts = String(Date.now());
+    const path = `/api/v1/devices/${deviceId}`;
+    const sig = sign(
+      me.id.sign.secretKey,
+      new TextEncoder().encode(buildSignedRequestString('GET', path, ts, new Uint8Array(0))),
+    );
+    const res = await app.request(path, {
+      headers: {
+        authorization: `Beam-Sig deviceId="${deviceId}", timestamp="${ts}", signature="${bytesToB64u(sig)}"`,
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { online: boolean };
+    expect(body.online).toBe(true);
   });
 });

@@ -646,6 +646,7 @@ type DeviceInfo = {
   kexPub: string;
   signPub: string;
   lastSeenAt: number | null;
+  online?: boolean;
 };
 
 function relativeTime(ms: number | null): string {
@@ -723,13 +724,22 @@ function DevicesPage() {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm font-medium">
-                    {d.name}{' '}
-                    {isSelf && <span className="text-xs text-indigo-500 ml-1">(this device)</span>}
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <span
+                      aria-label={d.online ? 'Online' : 'Offline'}
+                      title={d.online ? 'Online' : 'Offline'}
+                      className={`inline-block w-2 h-2 rounded-full shrink-0 ${d.online ? 'bg-green-500' : 'bg-gray-300'}`}
+                    />
+                    <span>
+                      {d.name}{' '}
+                      {isSelf && (
+                        <span className="text-xs text-indigo-500 ml-1">(this device)</span>
+                      )}
+                    </span>
                   </p>
                   <p className="text-xs text-gray-400">
-                    {d.platform} &middot; {d.id.slice(0, 8)}… &middot; seen{' '}
-                    {relativeTime(d.lastSeenAt)}
+                    {d.platform} &middot; {d.id.slice(0, 8)}… &middot;{' '}
+                    {d.online ? 'online now' : `seen ${relativeTime(d.lastSeenAt)}`}
                   </p>
                   <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
                 </div>
