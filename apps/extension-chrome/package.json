@@ -7,7 +7,8 @@
     "dev": "wxt",
     "build": "wxt build",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "zip": "wxt zip"
+    "zip": "wxt zip",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@routr/crypto": "workspace:*",
@@ -17,6 +18,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.1.7",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.4",
