@@ -211,9 +211,24 @@ type Envelope = {
 ```ts
 type Payload =
   | { kind: "url"; url: string; title?: string; note?: string }
-  | { kind: "file"; filename: string; mime: string; blob: ArrayBuffer }
-  | { kind: "control"; op: "rule_sync" | "device_added" | ...; data: ... };
+  | {
+      kind: "file";
+      filename: string;
+      mime: string;
+      sha256: string;     // hex of plaintext bytes
+      size: number;
+      blobId: string;     // /api/v1/blobs/:blobId
+      fileKey: string;    // base64url; AEAD key for the blob ciphertext
+    }
+  | { kind: "note"; text: string; title?: string }
+  | { kind: "control"; op: "rule_sync" | "device_added" | "device_revoked"; data: unknown };
 ```
+
+File payloads do not inline the bytes. The sender encrypts the file
+under a fresh symmetric key (carried in `fileKey`) and uploads the
+ciphertext as a blob; the envelope only carries the small metadata
+above. Recipients fetch the blob from `/api/v1/blobs/:blobId`,
+decrypt with the in-envelope `fileKey`, and verify against `sha256`.
 
 ## 9. Routing rules
 
