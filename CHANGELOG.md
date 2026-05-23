@@ -53,6 +53,12 @@ bootstrap.
   and a small amber hint appears when the entered text is the wrong
   length — catches the most common mistake (truncated paste) before
   the user submits and gets a generic server error.
+- **Tab-title unread badge** on the web Inbox. When envelopes arrive
+  while the tab is in the background the title shows "(N) Beam"; the
+  count resets to zero the moment the tab comes back to the foreground
+  (the user has seen them). Complements the desktop-notification path
+  — covers the case where notification permission was denied or the
+  OS toast was missed.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
