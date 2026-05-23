@@ -351,7 +351,24 @@ function InboxPage() {
   const [items, setItems] = useState<DecryptedItem[]>([]);
   const [connected, setConnected] = useState(false);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+  const [unread, setUnread] = useState(0);
   const socketRef = useRef<BeamSocket | null>(null);
+
+  // Tab-title badge: "(N) Beam" when N envelopes have arrived while the
+  // tab was hidden. Reset to zero whenever the tab becomes visible again
+  // (the user has seen them). Cleanup restores the bare title on unmount.
+  useEffect(() => {
+    const base = 'Beam';
+    document.title = unread > 0 ? `(${unread}) ${base}` : base;
+    function onVisible() {
+      if (!document.hidden) setUnread(0);
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      document.title = base;
+    };
+  }, [unread]);
 
   const refreshDeviceNames = async () => {
     try {
@@ -387,7 +404,19 @@ function InboxPage() {
       // both via live push and via the drain on reconnect; React keys
       // dedupe visually but the underlying state would otherwise hold
       // duplicates and ack twice.
-      setItems((prev) => (prev.some((it) => it.id === item.id) ? prev : [item, ...prev]));
+      let isNew = false;
+      setItems((prev) => {
+        if (prev.some((it) => it.id === item.id)) return prev;
+        isNew = true;
+        return [item, ...prev];
+      });
+      // Bump the tab-title unread count only for genuinely-new items
+      // received while the tab is hidden. Decryption failures still get
+      // counted — the user should see "1 message I can't read" rather
+      // than be silently ignored.
+      if (isNew && document.hidden) {
+        setUnread((u) => u + 1);
+      }
       // Only ack on successful decryption — if the local keystore is somehow
       // out of sync, we don't want to ack-and-lose. Failed envelopes stay
       // in the inbox until expiresAt, giving us another chance after a
