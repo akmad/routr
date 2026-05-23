@@ -8,6 +8,7 @@ import {
 } from '@routr/crypto';
 import { PROTOCOL_VERSION, canonicalize } from '@routr/protocol';
 import { signedFetch } from './api.js';
+import { formatBytes } from './format.js';
 import type { StoredIdentity } from './keystore.js';
 import { recordSend } from './sent.js';
 
@@ -150,6 +151,6 @@ export async function sendFile(
   await recordSend({
     kind: 'file',
     recipientIds: recipients.map((r) => r.id),
-    summary: `${filename} (${Math.round(data.length / 1024)} KB)`,
+    summary: `${filename} (${formatBytes(data.length)})`,
   });
 }
