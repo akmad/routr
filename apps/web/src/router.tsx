@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { handleRevoked, signedFetch } from './lib/api.js';
+import { formatBytes } from './lib/format.js';
 import { clearIdentity } from './lib/keystore.js';
 import {
   type Rule,
@@ -452,7 +453,7 @@ function InboxPage() {
                   className="text-indigo-600 hover:underline text-sm break-all text-left"
                 >
                   📎 {file.name}{' '}
-                  <span className="text-gray-400 text-xs">({Math.round(file.size / 1024)} KB)</span>
+                  <span className="text-gray-400 text-xs">({formatBytes(file.size)})</span>
                 </button>
               ))(item.file)
             ) : item.kind === 'note' && item.note ? (
@@ -626,7 +627,7 @@ function SendPage() {
             />
             {file && (
               <p className="text-xs text-gray-500 mt-1">
-                {file.name} &middot; {Math.round(file.size / 1024)} KB
+                {file.name} &middot; {formatBytes(file.size)}
               </p>
             )}
           </div>

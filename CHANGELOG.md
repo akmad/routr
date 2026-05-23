@@ -14,6 +14,7 @@ bootstrap.
   server URL silently drops packets.
 
 ### Added
+<<<<<<< HEAD
 - **Defensive response headers** on every server response:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
   `Referrer-Policy: no-referrer`. The server emits only JSON and opaque
@@ -34,6 +35,10 @@ bootstrap.
   Mainly fills the gap in note mode (a bare Enter inserts a newline
   there); in URL mode it's just consistency. Discoverable via the Send
   button's hover tooltip.
+- **Human-readable file sizes** in the web app (Inbox + Send pages): a
+  small `formatBytes` helper picks the right unit so a 3.4 MB file no
+  longer reads as "3482 KB" and a 1.5 GB file no longer reads as
+  "1572864 KB". 4 unit tests.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
