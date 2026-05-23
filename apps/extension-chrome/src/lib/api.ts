@@ -55,14 +55,26 @@ export async function registerDevice(
     invite?: string;
   },
 ): Promise<{ deviceId: string; userId: string }> {
-  const res = await fetch(`${serverUrl}/api/v1/devices`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  // 10s ceiling so a server URL that silently hangs (firewall dropping
+  // packets, captive portal, wrong port) fails out cleanly instead of
+  // leaving the popup pinned to "Setting up…" forever.
+  let res: Response;
+  try {
+    res = await fetch(`${serverUrl}/api/v1/devices`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error("can't reach server: timed out after 10s");
+    }
+    throw new Error(`can't reach server: ${err instanceof Error ? err.message : String(err)}`);
+  }
   if (!res.ok) {
-    const err = (await res.json()) as { error?: string };
-    throw new Error(err.error ?? `registration failed: ${res.status}`);
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errBody.error ?? `registration failed: ${res.status}`);
   }
   return res.json() as Promise<{ deviceId: string; userId: string }>;
 }

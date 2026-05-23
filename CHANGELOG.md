@@ -7,6 +7,12 @@ bootstrap.
 
 ## Unreleased — post-MVP polish
 
+### Fixed
+- **10-second timeout on the extension's `registerDevice` call.**
+  Matches the same hang-protection added to the web setup probe —
+  prevents the popup from staying stuck on "Setting up…" if the
+  server URL silently drops packets.
+
 ### Added
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
