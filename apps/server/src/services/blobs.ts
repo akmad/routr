@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -6,6 +6,21 @@ import { eq, lt } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { blobs } from '../db/schema.js';
 import { newId } from '../ids.js';
+
+/**
+ * Verify the blob storage directory exists and is writable, creating it
+ * if needed. Call once at startup so misconfigurations (read-only
+ * volume, wrong perms on a mounted directory, etc.) surface immediately
+ * with a clear error — not when the first user tries to upload a file.
+ *
+ * Throws with the underlying fs error attached if anything goes wrong.
+ */
+export async function ensureBlobDirWritable(blobDir: string): Promise<void> {
+  if (!existsSync(blobDir)) mkdirSync(blobDir, { recursive: true });
+  const probe = join(blobDir, `.write-probe-${randomBytes(8).toString('hex')}`);
+  await writeFile(probe, '');
+  await unlink(probe);
+}
 
 export type BlobMeta = {
   id: string;

@@ -6,11 +6,11 @@ import { openDatabase } from './db/index.js';
 import { runMigrations } from './db/migrate.js';
 import { createLogger } from './logger.js';
 import { wsRoute } from './routes/ws.js';
-import { cleanupOldBlobs } from './services/blobs.js';
+import { cleanupOldBlobs, ensureBlobDirWritable } from './services/blobs.js';
 import { cleanupExpiredEnvelopes } from './services/envelopes.js';
 import { cleanupInvites } from './services/invites.js';
 
-function main(): void {
+async function main(): Promise<void> {
   const config = loadConfig();
   const log = createLogger(config);
 
@@ -18,6 +18,16 @@ function main(): void {
 
   runMigrations(config.databaseUrl);
   const { db } = openDatabase(config.databaseUrl);
+
+  // Verify BLOB_STORAGE_DIR is writable before we start accepting traffic.
+  // Catches misconfigured Docker volumes / wrong perms with a clear error
+  // at startup instead of an opaque 500 on the first user upload.
+  try {
+    await ensureBlobDirWritable(config.blobStorageDir);
+  } catch (err) {
+    log.fatal({ err, blobStorageDir: config.blobStorageDir }, 'blob storage dir not writable');
+    process.exit(1);
+  }
 
   const { app, registry } = createApp({ db, log, blobStorageDir: config.blobStorageDir });
 
@@ -66,4 +76,4 @@ function main(): void {
   }, INVITE_CLEANUP_MS).unref();
 }
 
-main();
+void main();

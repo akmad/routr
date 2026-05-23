@@ -235,3 +235,29 @@ describe('cleanupOldBlobs', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('ensureBlobDirWritable', () => {
+  it('creates the dir if missing and probes a write', async () => {
+    const { ensureBlobDirWritable } = await import('../src/services/blobs.js');
+    const parent = mkdtempSync(join(tmpdir(), 'routr-ensuredir-'));
+    const target = join(parent, 'nested', 'blobs');
+    await ensureBlobDirWritable(target);
+    // Directory now exists and accepts writes — second call is a no-op.
+    await ensureBlobDirWritable(target);
+    rmSync(parent, { recursive: true, force: true });
+  });
+
+  it('rejects when the dir is not writable', async () => {
+    if (process.getuid?.() === 0) return; // root bypasses POSIX perms
+    const { ensureBlobDirWritable } = await import('../src/services/blobs.js');
+    const parent = mkdtempSync(join(tmpdir(), 'routr-ensuredir-'));
+    const { chmodSync } = await import('node:fs');
+    chmodSync(parent, 0o500); // read+exec, no write
+    try {
+      await expect(ensureBlobDirWritable(join(parent, 'sub'))).rejects.toBeDefined();
+    } finally {
+      chmodSync(parent, 0o700);
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
