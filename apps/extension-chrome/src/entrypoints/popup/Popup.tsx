@@ -13,6 +13,41 @@ type Device = { id: string; name: string; kexPub: string; signPub: string };
 
 type State = { tag: 'loading' } | { tag: 'setup' } | { tag: 'ready'; identity: StoredIdentity };
 
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // chrome-extension:// is a secure context so this is belt-and-
+      // suspenders, but keep it for parity with the web app helper.
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* nothing left to try */
+      }
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="text-xs text-indigo-600 hover:underline shrink-0"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+}
+
 export function Popup() {
   const [state, setState] = useState<State>({ tag: 'loading' });
   const [currentTabUrl, setCurrentTabUrl] = useState('');
@@ -305,7 +340,10 @@ function ReadyPanel({
         {showFingerprints && (
           <div className="mt-2 space-y-2">
             <div>
-              <p className="text-xs text-gray-400">This device</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400">This device</p>
+                {ownFp !== '—' && <CopyButton value={ownFp} />}
+              </div>
               <p className="text-xs font-mono select-all">{ownFp}</p>
             </div>
             {devices.map((d) => {
@@ -317,7 +355,10 @@ function ReadyPanel({
               }
               return (
                 <div key={d.id}>
-                  <p className="text-xs text-gray-400">{d.name}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400">{d.name}</p>
+                    {fp !== '—' && <CopyButton value={fp} />}
+                  </div>
                   <p className="text-xs font-mono select-all">{fp}</p>
                 </div>
               );
