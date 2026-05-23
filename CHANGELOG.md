@@ -8,6 +8,12 @@ bootstrap.
 ## Unreleased — post-MVP polish
 
 ### Added
+- **Defensive response headers** on every server response:
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
+  `Referrer-Policy: no-referrer`. The server emits only JSON and opaque
+  binary blobs, so this is the safe minimum — stops MIME-sniffing on
+  blob downloads, blocks framing, and keeps the server URL out of
+  outbound Referer headers. 2 tests.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
