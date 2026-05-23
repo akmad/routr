@@ -515,7 +515,7 @@ function InboxPage() {
             <div className="flex justify-between items-end mt-1">
               <p className="text-xs text-gray-400">
                 from {deviceNames[item.fromDevice] ?? `${item.fromDevice.slice(0, 8)}…`} &middot;{' '}
-                {new Date(item.createdAt).toLocaleTimeString()}
+                {inboxTimeLabel(item.createdAt)}
               </p>
               <button
                 type="button"
@@ -745,6 +745,18 @@ type DeviceInfo = {
   signPub: string;
   lastSeenAt: number | null;
 };
+
+// Render an inbox-item timestamp. HH:MM if it's from today (most
+// common case — inbox is for fresh stuff); short date+time otherwise,
+// so a yesterday-23:45 envelope doesn't look identical to today-23:45.
+function inboxTimeLabel(ms: number): string {
+  const d = new Date(ms);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+}
 
 function relativeTime(ms: number | null): string {
   if (ms == null) return 'never';
