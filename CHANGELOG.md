@@ -12,6 +12,11 @@ bootstrap.
   Matches the same hang-protection added to the web setup probe —
   prevents the popup from staying stuck on "Setting up…" if the
   server URL silently drops packets.
+- **Web setup probe now has a 10-second timeout.** Previously a server
+  URL that silently hung (firewall dropping packets, wrong port behind
+  a slow DNS) left the user staring at "Setting up…" forever — `fetch`
+  has no default timeout. Now fails out with "Can't reach server:
+  timed out after 10s" so the user can correct the URL.
 
 ### Added
 - **Defensive response headers** on every server response:

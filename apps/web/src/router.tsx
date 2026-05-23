@@ -155,19 +155,28 @@ function SetupPage() {
     setError('');
     try {
       // Probe the server before generating keys / hitting the registration
-      // endpoint — gives a clear error if the URL is wrong.
+      // endpoint — gives a clear error if the URL is wrong. 10-second
+      // ceiling so a URL that silently hangs (firewall dropping packets,
+      // wrong port behind a slow DNS) fails out instead of leaving the
+      // user staring at "Setting up…".
       const url = serverUrl.replace(/\/$/, '');
       try {
-        const probe = await fetch(`${url}/api/v1/health`);
+        const probe = await fetch(`${url}/api/v1/health`, {
+          signal: AbortSignal.timeout(10_000),
+        });
         if (!probe.ok) throw new Error(`server returned ${probe.status}`);
         const body = (await probe.json()) as { service?: string };
         if (body.service !== 'routr') {
           throw new Error('not a Beam server at that URL');
         }
       } catch (probeErr) {
-        throw new Error(
-          `Can't reach server: ${probeErr instanceof Error ? probeErr.message : probeErr}`,
-        );
+        const reason =
+          probeErr instanceof DOMException && probeErr.name === 'TimeoutError'
+            ? 'timed out after 10s'
+            : probeErr instanceof Error
+              ? probeErr.message
+              : String(probeErr);
+        throw new Error(`Can't reach server: ${reason}`);
       }
       await setupIdentity({ serverUrl: url, deviceName, invite: invite || undefined });
       window.location.href = '/inbox';
