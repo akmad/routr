@@ -200,6 +200,7 @@ function SetupPage() {
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             value={serverUrl}
             onChange={(e) => setServerUrl(e.target.value)}
+            autoComplete="url"
             required
           />
         </div>
@@ -212,6 +213,7 @@ function SetupPage() {
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             value={deviceName}
             onChange={(e) => setDeviceName(e.target.value)}
+            autoComplete="off"
             required
           />
         </div>
@@ -225,6 +227,7 @@ function SetupPage() {
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
             placeholder="43-char code from another device"
+            autoComplete="off"
           />
           {invite && invite.length !== 43 && (
             <p className="text-xs text-amber-600 mt-1">
@@ -652,6 +655,7 @@ function SendPage() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://…"
+              autoComplete="url"
               required
             />
           </div>
@@ -859,6 +863,7 @@ function DevicesPage() {
               type="number"
               min="60"
               max="86400"
+              autoComplete="off"
             />
           </div>
           <button
@@ -1122,6 +1127,7 @@ function RulesPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="YouTube to phone"
+              autoComplete="off"
               required
             />
           </div>
@@ -1153,6 +1159,7 @@ function RulesPage() {
                 value={patternValue}
                 onChange={(e) => setPatternValue(e.target.value)}
                 placeholder={patternType === 'kind' ? 'url or file' : 'youtube.com'}
+                autoComplete="off"
                 required
               />
             </div>

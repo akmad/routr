@@ -130,6 +130,7 @@ export function Options() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="YouTube to phone"
+              autoComplete="off"
               required
             />
           </div>
@@ -158,6 +159,7 @@ export function Options() {
                 value={patternValue}
                 onChange={(e) => setPatternValue(e.target.value)}
                 placeholder="youtube.com"
+                autoComplete="off"
                 required
               />
             </div>

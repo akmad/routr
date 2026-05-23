@@ -144,6 +144,7 @@ function SetupPanel({ onDone }: { onDone: (id: StoredIdentity) => void }) {
             className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
             value={serverUrl}
             onChange={(e) => setServerUrl(e.target.value)}
+            autoComplete="url"
             required
           />
         </div>
@@ -156,6 +157,7 @@ function SetupPanel({ onDone }: { onDone: (id: StoredIdentity) => void }) {
             className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
             value={deviceName}
             onChange={(e) => setDeviceName(e.target.value)}
+            autoComplete="off"
             required
           />
         </div>
@@ -169,6 +171,7 @@ function SetupPanel({ onDone }: { onDone: (id: StoredIdentity) => void }) {
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
             placeholder="43-char code from another device"
+            autoComplete="off"
           />
           {invite && invite.length !== 43 && (
             <p className="text-xs text-amber-600 mt-0.5">
