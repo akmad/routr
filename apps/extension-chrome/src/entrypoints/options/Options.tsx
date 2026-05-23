@@ -59,7 +59,8 @@ export function Options() {
     setRules(await listRules());
   }
 
-  async function remove(id: string) {
+  async function remove(id: string, name: string) {
+    if (!confirm(`Delete rule "${name}"?`)) return;
     await deleteRule(id);
     setRules(await listRules());
   }
@@ -106,7 +107,7 @@ export function Options() {
               </div>
               <button
                 type="button"
-                onClick={() => void remove(r.id)}
+                onClick={() => void remove(r.id, r.name)}
                 className="text-xs text-red-500 hover:underline"
               >
                 Delete
