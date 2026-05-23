@@ -7,6 +7,12 @@ bootstrap.
 
 ## Unreleased — post-MVP polish
 
+### Fixed
+- **10-second timeout on the extension's `registerDevice` call.**
+  Matches the same hang-protection added to the web setup probe —
+  prevents the popup from staying stuck on "Setting up…" if the
+  server URL silently drops packets.
+
 ### Added
 - **Defensive response headers** on every server response:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
