@@ -17,6 +17,10 @@ bootstrap.
   a slow DNS) left the user staring at "Setting up…" forever — `fetch`
   has no default timeout. Now fails out with "Can't reach server:
   timed out after 10s" so the user can correct the URL.
+- **Confirm before deleting a routing rule.** Previously a stray click
+  on Delete in the Rules page removed the rule with no prompt — easy
+  to lose a carefully-configured pattern. Matches the existing confirm
+  pattern on Devices revoke and Inbox/Sent clear-all.
 
 ### Added
 - **Defensive response headers** on every server response:
