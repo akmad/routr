@@ -90,6 +90,43 @@ function RootLayout() {
   );
 }
 
+// ─── Copy-to-clipboard button ─────────────────────────────────────────────────
+
+function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // navigator.clipboard requires a secure context; fall back to the
+      // legacy hidden-textarea + execCommand path on http://… deployments.
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* nothing left to try */
+      }
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="text-xs text-indigo-600 hover:underline shrink-0"
+    >
+      {copied ? 'Copied!' : label}
+    </button>
+  );
+}
+
 // ─── Setup page ───────────────────────────────────────────────────────────────
 
 function defaultServerUrl(): string {
@@ -731,7 +768,10 @@ function DevicesPage() {
                     {d.platform} &middot; {d.id.slice(0, 8)}… &middot; seen{' '}
                     {relativeTime(d.lastSeenAt)}
                   </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1 select-all">{fp}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xs font-mono text-gray-600 select-all">{fp}</p>
+                    {fp !== '—' && <CopyButton value={fp} />}
+                  </div>
                 </div>
                 {!isSelf && (
                   <button
@@ -775,7 +815,10 @@ function DevicesPage() {
         {invite && (
           <div className="mt-3 bg-gray-50 border border-gray-200 rounded p-3">
             <p className="text-xs text-gray-500 mb-1">Share this code with the new device:</p>
-            <code className="text-sm font-mono break-all select-all">{invite.token}</code>
+            <div className="flex items-start gap-2">
+              <code className="text-sm font-mono break-all select-all flex-1">{invite.token}</code>
+              <CopyButton value={invite.token} />
+            </div>
             <p className="text-xs text-gray-400 mt-1">
               Expires {new Date(invite.expiresAt).toLocaleString()} &middot; single use
             </p>
@@ -817,7 +860,10 @@ function SettingsPage() {
         </div>
         <div>
           <span className="text-gray-500">Fingerprint</span>
-          <div className="font-mono text-xs mt-0.5 select-all">{fp}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="font-mono text-xs select-all">{fp}</div>
+            {fp !== '—' && <CopyButton value={fp} />}
+          </div>
         </div>
         <div>
           <span className="text-gray-500">User ID</span>

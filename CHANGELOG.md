@@ -20,6 +20,12 @@ bootstrap.
   binary blobs, so this is the safe minimum — stops MIME-sniffing on
   blob downloads, blocks framing, and keeps the server URL out of
   outbound Referer headers. 2 tests.
+- **Copy buttons next to fingerprints and invite tokens** in the web app
+  (Devices + Settings pages). One-click copies the value (with a
+  hidden-textarea + `execCommand` fallback for insecure-context
+  deployments) and flashes "Copied!" for 1.5s. Removes the
+  triple-click-and-pray step from the out-of-band fingerprint
+  verification and device-pairing flows.
 - **Copy buttons next to fingerprints** in the Chrome extension popup —
   one-click copies "this device" or any paired device's fingerprint so
   it's trivial to paste over Signal/SMS for out-of-band verification.
