@@ -30,6 +30,10 @@ bootstrap.
   one-click copies "this device" or any paired device's fingerprint so
   it's trivial to paste over Signal/SMS for out-of-band verification.
   Mirrors the same affordance just added to the web app.
+- **`Cmd/Ctrl+Enter` to send** from anywhere in the web Send form.
+  Mainly fills the gap in note mode (a bare Enter inserts a newline
+  there); in URL mode it's just consistency. Discoverable via the Send
+  button's hover tooltip.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the

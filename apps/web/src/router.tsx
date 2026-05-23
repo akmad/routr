@@ -583,7 +583,19 @@ function SendPage() {
           Note
         </button>
       </div>
-      <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
+      <form
+        onSubmit={(e) => void onSubmit(e)}
+        onKeyDown={(e) => {
+          // Cmd/Ctrl+Enter from anywhere in the form fires send. Matters
+          // most in note mode where a bare Enter inserts a newline; in
+          // url mode it's just consistency with the textarea.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.requestSubmit();
+          }
+        }}
+        className="space-y-4"
+      >
         {mode === 'url' && (
           <div>
             <label htmlFor="send-url" className="block text-sm font-medium mb-1">
@@ -665,6 +677,7 @@ function SendPage() {
         <button
           type="submit"
           disabled={status === 'sending' || devices.length === 0}
+          title="Cmd/Ctrl+Enter"
           className="w-full bg-indigo-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
         >
           {status === 'sending' ? 'Sending…' : 'Send'}
