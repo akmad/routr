@@ -215,8 +215,13 @@ function SetupPage() {
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono"
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
-            placeholder="optional"
+            placeholder="43-char code from another device"
           />
+          {invite && invite.length !== 43 && (
+            <p className="text-xs text-amber-600 mt-1">
+              Invite codes are 43 characters — got {invite.length}.
+            </p>
+          )}
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button

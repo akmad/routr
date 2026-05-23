@@ -38,6 +38,12 @@ bootstrap.
   small `formatBytes` helper picks the right unit so a 3.4 MB file no
   longer reads as "3482 KB" and a 1.5 GB file no longer reads as
   "1572864 KB". 4 unit tests.
+- **Better invite-code placeholder + live length hint** on the web
+  Setup page and the extension popup's first-run panel. Placeholder
+  now says "43-char code from another device" instead of "optional",
+  and a small amber hint appears when the entered text is the wrong
+  length — catches the most common mistake (truncated paste) before
+  the user submits and gets a generic server error.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
