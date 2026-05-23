@@ -14,7 +14,6 @@ bootstrap.
   server URL silently drops packets.
 
 ### Added
-<<<<<<< HEAD
 - **Defensive response headers** on every server response:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
   `Referrer-Policy: no-referrer`. The server emits only JSON and opaque
