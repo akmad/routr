@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import type { Db } from './db/index.js';
 import type { Logger } from './logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
+import { securityHeaders } from './middleware/security-headers.js';
 import { NonceStore } from './nonce-store.js';
 import { adminRoute } from './routes/admin.js';
 import { blobsRoute } from './routes/blobs.js';
@@ -40,6 +41,7 @@ export function createApp(deps: AppDeps): { app: Hono<AppEnv>; registry: Connect
   const nonceStore = new NonceStore(5 * 60 * 1000); // 5-min replay window
   const app = new Hono<AppEnv>();
 
+  app.use('*', securityHeaders);
   app.use('*', async (c, next) => {
     c.set('db', deps.db);
     c.set('log', deps.log);
