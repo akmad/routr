@@ -168,8 +168,13 @@ function SetupPanel({ onDone }: { onDone: (id: StoredIdentity) => void }) {
             className="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono"
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
-            placeholder="from another device"
+            placeholder="43-char code from another device"
           />
+          {invite && invite.length !== 43 && (
+            <p className="text-xs text-amber-600 mt-0.5">
+              Codes are 43 chars — got {invite.length}.
+            </p>
+          )}
         </div>
         {error && <p className="text-red-600 text-xs">{error}</p>}
         <button
