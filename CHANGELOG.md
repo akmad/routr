@@ -20,6 +20,10 @@ bootstrap.
   binary blobs, so this is the safe minimum — stops MIME-sniffing on
   blob downloads, blocks framing, and keeps the server URL out of
   outbound Referer headers. 2 tests.
+- **Copy buttons next to fingerprints** in the Chrome extension popup —
+  one-click copies "this device" or any paired device's fingerprint so
+  it's trivial to paste over Signal/SMS for out-of-band verification.
+  Mirrors the same affordance just added to the web app.
 - **Text notes** (PushBullet parity): a new `note` payload kind. Send any
   text between devices end-to-end encrypted.
 - **Multi-recipient send** in the web app: "All my other devices" is the
