@@ -1,4 +1,4 @@
-import { bytesToB64u, fingerprint, generateIdentity } from '@routr/crypto';
+import { b64uToBytes, bytesToB64u, fingerprint, generateIdentity } from '@routr/crypto';
 import { type FormEvent, useEffect, useState } from 'react';
 import { registerDevice, signedFetch } from '../../lib/api.js';
 import {
@@ -311,21 +311,9 @@ function ReadyPanel({
             {devices.map((d) => {
               let fp = '—';
               try {
-                const sb = Uint8Array.from(
-                  atob(
-                    `${d.signPub.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat((4 - (d.signPub.length % 4)) % 4)}`,
-                  ),
-                  (c) => c.charCodeAt(0),
-                );
-                const kb = Uint8Array.from(
-                  atob(
-                    `${d.kexPub.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat((4 - (d.kexPub.length % 4)) % 4)}`,
-                  ),
-                  (c) => c.charCodeAt(0),
-                );
-                fp = fingerprint(sb, kb);
+                fp = fingerprint(b64uToBytes(d.signPub), b64uToBytes(d.kexPub));
               } catch {
-                // ignore
+                // Malformed key bytes — show placeholder.
               }
               return (
                 <div key={d.id}>
